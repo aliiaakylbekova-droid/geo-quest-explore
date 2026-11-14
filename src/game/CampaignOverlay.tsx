@@ -30,14 +30,15 @@ export function CampaignOverlay() {
   const continueCampaign = useGame((s) => s.continueCampaign)
   const retryLevel = useGame((s) => s.retryLevel)
   const lastFeedback = useGame((s) => s.lastFeedback)
+  const flagMoment = useGame((s) => s.flagMoment)
   const mission = useGame((s) => s.mission)
   const stage = useGame((s) => s.stage)
   const ui = t().play
   void useGame((s) => s.progress.locale)
 
   if (stage === "discover") return null
-  if (stage === "flag" && lastFeedback) {
-    if (lastFeedback.ok) {
+  if (stage === "flag" && (flagMoment || lastFeedback)) {
+    if (flagMoment === "win" || lastFeedback?.ok) {
       return (
         <div className="gq-ticket" data-result="ticket">
           <div className="gq-fireworks" aria-hidden>

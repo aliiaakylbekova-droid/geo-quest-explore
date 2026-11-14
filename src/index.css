@@ -577,7 +577,7 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
 .gq-wrong-center {
   position: fixed;
   inset: 0;
-  z-index: 52;
+  z-index: 70;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -607,7 +607,7 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
 .gq-ticket {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: 70;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -639,17 +639,18 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
 }
 .gq-fireworks i {
   position: absolute;
-  width: 8px;
-  height: 8px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: #ffd76a;
   box-shadow:
-    0 0 0 0 #ffd76a,
-    18px -28px 0 #ff6b6b,
-    -22px -12px 0 #5ee7ff,
-    26px 14px 0 #fff,
-    -16px 22px 0 #e8c547,
-    4px 30px 0 #ff9ad5;
+    0 0 12px 4px #ffd76a,
+    28px -42px 0 3px #ff6b6b,
+    -34px -18px 0 3px #5ee7ff,
+    40px 22px 0 2px #fff,
+    -24px 34px 0 3px #e8c547,
+    8px 46px 0 2px #ff9ad5,
+    -48px 8px 0 2px #fff1a8;
   animation: burst 1.4s ease-out infinite;
 }
 .gq-fireworks i:nth-child(1) { left: 22%; top: 28%; animation-delay: 0s; }
@@ -761,7 +762,16 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
   }
   .hud-left { bottom: 148px; }
   .hud-right { bottom: 80px; max-height: 22vh; }
-  .hud-right .stat-stack, .hud-right .layers { display: none; }
+  .hud-right > :not(.flag-hunt) { display: none; }
+  .hud-right {
+    bottom: auto;
+    top: 56px;
+    max-height: none;
+    width: min(180px, 46vw);
+    left: auto;
+    right: 8px;
+  }
+  .flag-hunt { padding: 8px 10px; }
   .hud-bottom {
     left: 8px;
     right: 8px;

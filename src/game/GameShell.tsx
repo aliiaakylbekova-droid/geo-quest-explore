@@ -188,7 +188,7 @@ export function GameShell() {
 
   useEffect(() => {
     if (stage !== "flag" || !lastFeedback?.ok || !mission) return
-    const id = window.setTimeout(() => newFlagRound("flag"), 2800)
+    const id = window.setTimeout(() => newFlagRound("flag"), 3400)
     return () => window.clearTimeout(id)
   }, [stage, lastFeedback?.ok, mission?.id])
 
@@ -350,7 +350,6 @@ export function GameShell() {
         ) : !hideNames && country ? (
           <div className="gq-select-chip">{country.name}</div>
         ) : null}
-        <CampaignOverlay />
       </main>
 
       <aside className="hud-right">
@@ -521,6 +520,7 @@ export function GameShell() {
           </button>
         ) : null}
       </nav>
+      <CampaignOverlay />
     </div>
   )
 }

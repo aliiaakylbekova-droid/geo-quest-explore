@@ -79,6 +79,7 @@ type GameState = {
   spinBoost: number
   flagPins: string[]
   screenFlash: "red" | null
+  flagMoment: "win" | "lose" | null
   displayXp: number
   lastCountryName: string | null
   advancing: boolean
@@ -144,6 +145,7 @@ export const useGame = create<GameState>((set, get) => ({
   spinBoost: 0,
   flagPins: [],
   screenFlash: null,
+  flagMoment: null,
   displayXp: 0,
   lastCountryName: null,
   advancing: false,
@@ -303,6 +305,7 @@ export const useGame = create<GameState>((set, get) => ({
         spinBoost: 0,
         flagPins: pins,
         screenFlash: null,
+        flagMoment: useFlag ? "win" : get().flagMoment,
         lastFeedback: { ok: true, text: t().play.correctLocation },
       })
       window.setTimeout(() => {
@@ -336,6 +339,7 @@ export const useGame = create<GameState>((set, get) => ({
         campaignPhase: useCampaign ? "wrong" : st.campaignPhase,
         hitTint: "red",
         screenFlash: useFlag ? "red" : null,
+        flagMoment: useFlag ? "lose" : get().flagMoment,
         lastFeedback: { ok: false, text: hint },
       })
       if (useFlag) {
@@ -376,6 +380,7 @@ export const useGame = create<GameState>((set, get) => ({
       campaign: flagLike ? null : get().campaign,
       missionEndsAt: Date.now() + mission.timeMs * bonus,
       lastFeedback: null,
+      flagMoment: null,
       highlightIso: mission.targetIso ?? null,
       stage: flagLike ? "flag" : "mission",
       flyTo:
@@ -393,6 +398,7 @@ export const useGame = create<GameState>((set, get) => ({
       missionEndsAt: null,
       highlightIso: null,
       lastFeedback: null,
+      flagMoment: null,
       stage: "explore",
       flyTo: { lat: 18, lng: 20, dist: 6.5 },
     }),

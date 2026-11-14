@@ -29,7 +29,7 @@ export default function App() {
       flagTarget: () => useGame.getState().mission?.targetIso ?? null,
       flyTarget: () => {
         const m = useGame.getState().mission
-        if (m?.lat != null) useGame.getState().fly(m.lat, m.lng ?? 0, 3.05)
+        if (m?.lat != null) useGame.getState().fly(m.lat, m.lng ?? 0, 3.9)
       },
     }
   }, [])
