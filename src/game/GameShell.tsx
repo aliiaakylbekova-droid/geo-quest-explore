@@ -61,7 +61,7 @@ export function GameShell() {
   const lastCountryName = useGame((s) => s.lastCountryName)
   const hitTint = useGame((s) => s.hitTint)
   const screenFlash = useGame((s) => s.screenFlash)
-  const hideNames = stage === "mission" || Boolean(campaign)
+  const hideNames = stage === "mission"
   const [hintOn, setHintOn] = useState(false)
   const [point, setPoint] = useState<{ title: string; text: string } | null>(null)
   const [flagRound, setFlagRound] = useState<StoryMission | null>(null)

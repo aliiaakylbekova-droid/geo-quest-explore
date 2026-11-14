@@ -220,8 +220,9 @@ export const useGame = create<GameState>((set, get) => ({
     const home = stage === "explore" && get().stage !== "explore"
     set({
       stage,
+      campaign: stage === "mission" ? get().campaign : null,
       lastFeedback: null,
-      flyTo: home ? { lat: 18, lng: 20, dist: 6.5 } : get().flyTo,
+      flyTo: home ? { lat: 25, lng: 12, dist: 6.5 } : get().flyTo,
     })
     void persist(progress)
     if (progress !== get().progress) set({ progress })
@@ -369,15 +370,17 @@ export const useGame = create<GameState>((set, get) => ({
 
   startMission: (mission) => {
     const bonus = get().progress.difficulty === "hard" ? 0.7 : get().progress.difficulty === "easy" ? 1.4 : 1
+    const flagLike = mission.kind === "flag" || mission.kind === "capital" || mission.kind === "neighbors" || mission.kind === "shape"
     set({
       mission,
+      campaign: flagLike ? null : get().campaign,
       missionEndsAt: Date.now() + mission.timeMs * bonus,
       lastFeedback: null,
       highlightIso: mission.targetIso ?? null,
-      stage: mission.kind === "flag" || mission.kind === "capital" || mission.kind === "neighbors" || mission.kind === "shape" ? "flag" : "mission",
+      stage: flagLike ? "flag" : "mission",
       flyTo:
-        mission.kind === "flag" || mission.kind === "capital" || mission.kind === "neighbors" || mission.kind === "shape"
-          ? { lat: 18, lng: 20, dist: 6.6 }
+        flagLike && mission.lat != null
+          ? { lat: mission.lat, lng: mission.lng ?? 0, dist: 4.6 }
           : mission.lat != null
             ? { lat: mission.lat, lng: mission.lng ?? 0, dist: 5.4 }
             : { lat: 20, lng: 30, dist: 6.5 },
