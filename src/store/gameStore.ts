@@ -77,6 +77,8 @@ type GameState = {
   campaignPhase: CampaignPhase
   hitTint: HitTint
   spinBoost: number
+  flagPins: string[]
+  screenFlash: "red" | null
   displayXp: number
   lastCountryName: string | null
   advancing: boolean
@@ -140,6 +142,8 @@ export const useGame = create<GameState>((set, get) => ({
   campaignPhase: "play",
   hitTint: null,
   spinBoost: 0,
+  flagPins: [],
+  screenFlash: null,
   displayXp: 0,
   lastCountryName: null,
   advancing: false,
@@ -285,6 +289,8 @@ export const useGame = create<GameState>((set, get) => ({
         get().completeMission(st.mission.id)
         get().note(`${st.mission.title}: ${st.mission.recap}`)
       }
+      const pins =
+        useFlag && hit.iso && !st.flagPins.includes(hit.iso) ? [...st.flagPins, hit.iso] : st.flagPins
       set({
         selectedIso: hit.iso,
         highlightIso: hit.iso,
@@ -294,6 +300,8 @@ export const useGame = create<GameState>((set, get) => ({
         campaignPhase: useCampaign ? "correct" : st.campaignPhase,
         hitTint: "gold",
         spinBoost: 0,
+        flagPins: pins,
+        screenFlash: null,
         lastFeedback: { ok: true, text: t().play.correctLocation },
       })
       window.setTimeout(() => {
@@ -318,7 +326,7 @@ export const useGame = create<GameState>((set, get) => ({
       }, 900)
     } else {
       audio.play("fail")
-      const hint = useCampaign ? st.campaign!.hint : st.mission?.hint || t().play.tryElsewhere
+      const hint = useFlag ? t().play.flagWrong : useCampaign ? st.campaign!.hint : st.mission?.hint || t().play.tryElsewhere
       set({
         selectedIso: hit.iso,
         lastHit: hit,
@@ -326,8 +334,14 @@ export const useGame = create<GameState>((set, get) => ({
         progress,
         campaignPhase: useCampaign ? "wrong" : st.campaignPhase,
         hitTint: "red",
+        screenFlash: useFlag ? "red" : null,
         lastFeedback: { ok: false, text: hint },
       })
+      if (useFlag) {
+        window.setTimeout(() => {
+          if (get().screenFlash === "red") set({ screenFlash: null })
+        }, 700)
+      }
       window.setTimeout(() => {
         if (get().campaignPhase !== "wrong") return
         set({ campaignPhase: useCampaign ? "play" : get().campaignPhase, hitTint: null })

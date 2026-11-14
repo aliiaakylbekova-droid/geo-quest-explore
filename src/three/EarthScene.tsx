@@ -19,6 +19,8 @@ import { useGame } from "../store/gameStore"
 import type { CountryRecord, NamedLine } from "../geo/catalog"
 import { isoOf, type Place } from "../geo/catalog"
 import { EARTH_R, cameraFor, geometryFromGeoJSON } from "./geo"
+import { CountryLabels } from "./CountryLabels"
+import { FlagPins } from "./FlagPins"
 import { GlobePick } from "./GlobePick"
 
 export type Layers = {
@@ -92,7 +94,7 @@ function Atmosphere() {
 
 export function EarthScene({
   features,
-  countries: _countries,
+  countries,
   cities: _cities,
   rivers,
   lakes: _lakes,
@@ -114,18 +116,22 @@ export function EarthScene({
   const introPhase = useGame((s) => s.introPhase)
   const finishIntro = useGame((s) => s.finishIntro)
   const hitTint = useGame((s) => s.hitTint)
-  const spinBoost = useGame((s) => s.spinBoost)
   const campaignPhase = useGame((s) => s.campaignPhase)
+  const stage = useGame((s) => s.stage)
+  const campaign = useGame((s) => s.campaign)
+  const flagPins = useGame((s) => s.flagPins)
+  const missionMode = stage === "mission" || Boolean(campaign)
+  const showNames = !missionMode && stage !== "discover"
+  const strongBorders = missionMode || layers.borders
   const earth = useRef<Group>(null)
   const globeMesh = useRef<Mesh>(null)
   const fly = useRef(0)
   const target = useRef(new Vector3(0, 0.4, 6.2))
   const look = useRef(new Vector3(0, 0, 0))
-  const far = useRef(new Vector3(0, 0.55, 11.2))
-  const near = useRef(new Vector3(0, 0.42, 6.35))
+  const far = useRef(cameraFor(18, 8, 11.2))
+  const near = useRef(cameraFor(25, 12, 6.35))
   const introClock = useRef(0)
   const introDone = useRef(false)
-  const boost = useRef(0)
   const outline = useRef(new Color("#5ee7ff"))
   const outlineMat = useRef<LineBasicMaterial>(null)
   const flying = useRef(false)
@@ -136,10 +142,6 @@ export function EarthScene({
     fly.current = 1
     flying.current = true
   }, [flyTo, introPhase])
-
-  useEffect(() => {
-    boost.current = spinBoost
-  }, [spinBoost])
 
   useEffect(() => {
     const sph = new Spherical()
@@ -170,11 +172,6 @@ export function EarthScene({
   }, [camera, introPhase])
 
   useFrame((_, dt) => {
-    const playing = introPhase === "ready"
-    const easeStop = campaignPhase === "correct" || campaignPhase === "success"
-    const spin = easeStop ? boost.current * 0.35 : playing ? 0.075 : 0.09
-    boost.current = Math.max(0, boost.current - dt * (easeStop ? 0.55 : 0.12))
-    if (earth.current && spin > 0.0001) earth.current.rotation.y += dt * spin
     if (sun.current) sun.current.position.copy(camera.position)
 
     const want =
@@ -257,10 +254,19 @@ export function EarthScene({
       </mesh>
       <Atmosphere />
       <ClimateShell on={layers.climate} />
-      {layers.borders ? (
-        <lineSegments geometry={borderGeo}>
-          <lineBasicMaterial color="#f2e6c2" transparent opacity={0.55} />
-        </lineSegments>
+      {strongBorders ? (
+        <>
+          <lineSegments geometry={borderGeo} raycast={() => undefined}>
+            <lineBasicMaterial color={missionMode ? "#1a1408" : "#3a3428"} transparent opacity={0.95} />
+          </lineSegments>
+          <lineSegments geometry={borderGeo} raycast={() => undefined} scale={1.004}>
+            <lineBasicMaterial
+              color={missionMode ? "#f6e6b8" : "#e8d9a8"}
+              transparent
+              opacity={missionMode ? 1 : 0.82}
+            />
+          </lineSegments>
+        </>
       ) : null}
       {layers.rivers ? (
         <lineSegments geometry={riverGeo}>
@@ -268,10 +274,12 @@ export function EarthScene({
         </lineSegments>
       ) : null}
       {selectedGeo ? (
-        <lineSegments geometry={selectedGeo}>
+        <lineSegments geometry={selectedGeo} raycast={() => undefined}>
           <lineBasicMaterial ref={outlineMat} color="#5ee7ff" transparent opacity={0.98} />
         </lineSegments>
       ) : null}
+      <CountryLabels countries={countries} visible={showNames} />
+      <FlagPins isos={flagPins} />
       </group>
       <OrbitControls
         enablePan={false}

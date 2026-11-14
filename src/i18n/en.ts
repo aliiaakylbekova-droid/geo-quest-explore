@@ -152,5 +152,6 @@ export const en: Dict = {
     settingsBrief: "Music and SFX. Difficulty changes the timer.",
     campaignWrap: "You mapped Asia, Kyrgyzstan, France, Egypt, the Nile, Tian Shan, and Issyk-Kul.",
     tryElsewhere: "Try another place on the globe.",
+    flagWrong: "Wrong — that is not the country.",
   },
 }

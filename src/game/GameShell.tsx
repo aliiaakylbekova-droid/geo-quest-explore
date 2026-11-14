@@ -60,6 +60,8 @@ export function GameShell() {
   const tickTimeout = useGame((s) => s.tickTimeout)
   const lastCountryName = useGame((s) => s.lastCountryName)
   const hitTint = useGame((s) => s.hitTint)
+  const screenFlash = useGame((s) => s.screenFlash)
+  const hideNames = stage === "mission" || Boolean(campaign)
   const [hintOn, setHintOn] = useState(false)
   const [point, setPoint] = useState<{ title: string; text: string } | null>(null)
   const [flagRound, setFlagRound] = useState<StoryMission | null>(null)
@@ -208,7 +210,8 @@ export function GameShell() {
             : mission?.story
 
   return (
-    <div className={`gq-live hud intro-${introPhase}`} data-hud="explorer-v2" data-intro={introPhase}>
+    <div className={`gq-live hud intro-${introPhase}${screenFlash === "red" ? " is-flash-red" : ""}`} data-hud="explorer-v2" data-intro={introPhase}>
+      {screenFlash === "red" ? <div className="gq-flash-red" aria-hidden /> : null}
       <header className="hud-top">
         <div className="brand">
           <strong>GEO QUEST</strong>
@@ -328,18 +331,18 @@ export function GameShell() {
           onPick={judge}
           onPoint={(title, text) => setPoint({ title, text })}
           onHover={(hit) => {
-            if (!hit?.name) setHoverTip(null)
+            if (hideNames || !hit?.name) setHoverTip(null)
             else setHoverTip({ name: hit.name, x: hit.x, y: hit.y })
           }}
         />
-        {hoverTip ? (
+        {!hideNames && hoverTip ? (
           <div className="gq-tip" style={{ left: hoverTip.x, top: hoverTip.y }}>
             {hoverTip.name}
           </div>
         ) : null}
-        {lastCountryName && (hitTint === "gold" || hitTint === "cyan" || selectedIso) ? (
+        {!hideNames && lastCountryName && (hitTint === "gold" || hitTint === "cyan" || selectedIso) ? (
           <div className={`gq-select-chip tint-${hitTint || "cyan"}`}>{lastCountryName}</div>
-        ) : country ? (
+        ) : !hideNames && country ? (
           <div className="gq-select-chip">{country.name}</div>
         ) : null}
         <CampaignOverlay />

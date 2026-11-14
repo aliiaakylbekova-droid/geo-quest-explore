@@ -15,7 +15,11 @@ export function latLngToVec(lat: number, lng: number, radius = EARTH_R) {
 export function vecToLatLng(v: Vector3) {
   const n = v.clone().normalize()
   const lat = 90 - (Math.acos(Math.min(1, Math.max(-1, n.y))) * 180) / Math.PI
-  const lng = (Math.atan2(n.z, -n.x) * 180) / Math.PI
+  // Inverse of latLngToVec (theta = lng+180). Missing the −180 made
+  // Europe/America sit on the wrong hemisphere under the cursor.
+  let lng = (Math.atan2(n.z, -n.x) * 180) / Math.PI - 180
+  if (lng <= -180) lng += 360
+  if (lng > 180) lng -= 360
   return { lat, lng }
 }
 
