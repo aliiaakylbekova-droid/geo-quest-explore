@@ -330,6 +330,7 @@ export const useGame = create<GameState>((set, get) => ({
       }, 900)
     } else {
       audio.play("fail")
+      if (useFlag) audio.play("ambient")
       const hint = useFlag ? t().play.flagWrong : useCampaign ? st.campaign!.hint : st.mission?.hint || t().play.tryElsewhere
       set({
         selectedIso: hit.iso,
@@ -345,7 +346,7 @@ export const useGame = create<GameState>((set, get) => ({
       if (useFlag) {
         window.setTimeout(() => {
           if (get().screenFlash === "red") set({ screenFlash: null })
-        }, 1600)
+        }, 2300)
       }
       window.setTimeout(() => {
         if (get().campaignPhase !== "wrong") return

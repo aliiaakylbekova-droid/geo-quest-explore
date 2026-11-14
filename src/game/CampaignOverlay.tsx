@@ -51,10 +51,20 @@ export function CampaignOverlay() {
       )
     }
     return (
-      <div className="gq-wrong-center" data-result="wrong">
-        <p className="kicker">{ui.tryAgain}</p>
-        <h2>{ui.flagWrong}</h2>
-      </div>
+      <>
+        <div className="gq-wrong-center" data-result="wrong">
+          <p className="gq-bang" aria-hidden>
+            !
+          </p>
+          <h2>{ui.flagWrong}</h2>
+        </div>
+        {mission?.hint ? (
+          <aside className="gq-hint-drawer" data-result="hint">
+            <p className="kicker">{ui.hint}</p>
+            <p>{mission.hint}</p>
+          </aside>
+        ) : null}
+      </>
     )
   }
   if (!campaign && lastFeedback) {

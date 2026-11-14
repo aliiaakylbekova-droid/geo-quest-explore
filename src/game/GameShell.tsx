@@ -35,6 +35,16 @@ function countryName(iso: string | null) {
   return getCatalog()?.byIso.get(iso)?.name ?? iso
 }
 
+const CONTINENT_RU: Record<string, string> = {
+  Asia: "Азия",
+  Europe: "Европа",
+  Africa: "Африка",
+  "North America": "Северная Америка",
+  "South America": "Южная Америка",
+  Oceania: "Океания",
+  Antarctica: "Антарктида",
+}
+
 export function GameShell() {
   const stage = useGame((s) => s.stage)
   const setStage = useGame((s) => s.setStage)
@@ -109,7 +119,7 @@ export function GameShell() {
         title: "Охотник за флагами",
         story: "Перед тобой флаг. Найди страну на карте мира.",
         goal: "Кликни страну, которой принадлежит этот флаг.",
-        hint: `Столица: ${c.capital || "—"}. Материк: ${c.continent}.`,
+        hint: `Столица: ${c.capital || "—"}. Материк: ${CONTINENT_RU[c.continent] ?? c.continent}.`,
         recap: `Это ${c.name}. Столица — ${c.capital}.`,
         timeMs: 50_000,
         xp: 90,

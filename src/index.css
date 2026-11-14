@@ -566,12 +566,22 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
   inset: 0;
   z-index: 50;
   pointer-events: none;
-  background: rgba(176, 12, 28, 0.72);
-  animation: gqFlashRed 1.6s ease forwards;
+  background: radial-gradient(
+    ellipse 40% 36% at 50% 48%,
+    rgba(70, 12, 16, 0.12) 0%,
+    rgba(110, 18, 24, 0.2) 34%,
+    rgba(150, 28, 36, 0.5) 64%,
+    rgba(88, 6, 12, 0.78) 100%
+  );
+  box-shadow:
+    inset 0 0 110px 42px rgba(90, 8, 14, 0.5),
+    inset 0 0 220px 110px rgba(140, 18, 28, 0.38);
+  filter: saturate(0.78);
+  animation: gqVignetteFade 2.2s ease forwards;
 }
-@keyframes gqFlashRed {
+@keyframes gqVignetteFade {
   0% { opacity: 1; }
-  55% { opacity: 0.95; }
+  28% { opacity: 0.92; }
   100% { opacity: 0; }
 }
 .gq-wrong-center {
@@ -582,27 +592,71 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   margin: 0;
   padding: 24px;
   border: 0;
   border-radius: 0;
-  background: rgba(148, 8, 22, 0.92);
+  background: transparent;
   text-align: center;
   pointer-events: none;
+  animation: missCopy 2.4s ease forwards;
 }
 .gq-wrong-center h2 {
   font-family: Cinzel, serif;
-  font-size: clamp(22px, 5vw, 36px);
-  letter-spacing: 0.06em;
+  font-size: clamp(26px, 6vw, 44px);
+  letter-spacing: 0.04em;
   margin: 0;
-  color: #fff6f4;
+  max-width: 16em;
+  color: #fff4f0;
+  text-shadow: 0 2px 18px rgba(40, 0, 0, 0.55);
 }
-.gq-wrong-center .kicker {
-  font-size: 13px;
-  letter-spacing: 0.18em;
+.gq-bang {
+  margin: 0;
+  font-family: Cinzel, serif;
+  font-size: clamp(72px, 14vw, 120px);
+  line-height: 0.8;
+  font-weight: 700;
+  color: #ff7a68;
+  -webkit-text-stroke: 1px rgba(40, 0, 0, 0.45);
+  text-shadow: 0 0 32px rgba(255, 70, 60, 0.55), 0 8px 18px rgba(20, 0, 0, 0.45);
+}
+.gq-hint-drawer {
+  position: fixed;
+  z-index: 72;
+  left: 16px;
+  bottom: 88px;
+  width: min(340px, 86vw);
+  padding: 16px 18px 14px;
+  border-radius: 0 16px 16px 4px;
+  border: 1px solid rgba(255, 150, 130, 0.28);
+  background: rgba(16, 10, 12, 0.86);
+  backdrop-filter: blur(16px) saturate(1.1);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+  color: var(--white);
+  pointer-events: auto;
+  animation: hintDrawer 0.65s 1.05s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.gq-hint-drawer .kicker {
+  margin: 0 0 6px;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: #ffd0c8;
+  font-size: 11px;
+  color: #ffc4b8;
+}
+.gq-hint-drawer p:last-child {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: rgba(244, 247, 251, 0.88);
+}
+@keyframes hintDrawer {
+  from { transform: translateX(calc(-100% - 24px)); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes missCopy {
+  0%, 42% { opacity: 1; }
+  100% { opacity: 0; }
 }
 .gq-ticket {
   position: fixed;
@@ -665,7 +719,13 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
   100% { transform: scale(2.4); opacity: 0; }
 }
 .gq-live.is-flash-red {
-  box-shadow: inset 0 0 0 8px rgba(220, 30, 40, 0.95);
+  animation: gqShake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+@keyframes gqShake {
+  10%, 90% { transform: translate3d(-5px, 0, 0); }
+  20%, 80% { transform: translate3d(7px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-11px, 1px, 0); }
+  40%, 60% { transform: translate3d(11px, -1px, 0); }
 }
 
 .gq-result {
@@ -783,4 +843,10 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
   .hud-bottom button { min-width: 64px; flex: 0 0 auto; }
   .flag-xl { max-height: 72px; }
   .gq-result { width: min(380px, 92vw); bottom: 80px; }
+  .gq-hint-drawer {
+    left: 8px;
+    right: 8px;
+    width: auto;
+    bottom: 76px;
+  }
 }

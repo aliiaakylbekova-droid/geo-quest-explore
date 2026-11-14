@@ -92,7 +92,11 @@ class AudioManager {
     else if (name === "zoom") this.sweep(180, 520, 0.42, 0.08)
     else if (name === "discovery") this.arpeggio([523, 659, 784], 0.1, 0.11)
     else if (name === "success") this.arpeggio([392, 494, 587, 784], 0.11, 0.14)
-    else if (name === "fail") this.sweep(280, 140, 0.28, 0.07)
+    else if (name === "fail") {
+      this.sweep(320, 68, 0.44, 0.16)
+      this.blip(62, 0.24, "sine")
+      window.setTimeout(() => this.sweep(190, 48, 0.28, 0.09), 70)
+    }
     else if (name === "xp") this.blip(880, 0.06, "sine")
     else if (name === "unlock") this.arpeggio([659, 784, 988, 1175], 0.08, 0.1)
     else if (name === "transition") this.sweep(240, 640, 0.55, 0.06)
@@ -149,20 +153,20 @@ class AudioManager {
     const g = ctx.createGain()
     g.gain.value = 0.0001
     g.connect(this.musicBus!)
-    const freqs = [110, 164.8, 196]
+    const freqs = [98, 146.8, 196, 246.9]
     this.ambientNodes = freqs.map((f, i) => {
       const osc = ctx.createOscillator()
-      osc.type = i === 0 ? "sine" : "triangle"
+      osc.type = i % 2 ? "triangle" : "sine"
       osc.frequency.value = f
       const filt = ctx.createBiquadFilter()
       filt.type = "lowpass"
-      filt.frequency.value = 640
+      filt.frequency.value = 720
       osc.connect(filt)
       filt.connect(g)
       osc.start()
       return osc
     })
-    g.gain.exponentialRampToValueAtTime(0.045, ctx.currentTime + 1.6)
+    g.gain.exponentialRampToValueAtTime(0.07, ctx.currentTime + 1.4)
     this.ambientGain = g
   }
 
