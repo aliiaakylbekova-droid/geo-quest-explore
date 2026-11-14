@@ -341,7 +341,7 @@ export const useGame = create<GameState>((set, get) => ({
       if (useFlag) {
         window.setTimeout(() => {
           if (get().screenFlash === "red") set({ screenFlash: null })
-        }, 700)
+        }, 1600)
       }
       window.setTimeout(() => {
         if (get().campaignPhase !== "wrong") return

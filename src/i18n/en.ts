@@ -115,7 +115,12 @@ export const en: Dict = {
   play: {
     geoGame: "GEO GAME",
     nickname: "Player name",
-    start: "START",
+    askName: "What is your name, explorer?",
+    nickNext: "Next",
+    helloExplorer: "Hello, {name}!",
+    start: "Let's start our journey",
+    nextTicket: "Your ticket to the next journey",
+    congrats: "Congratulations!",
     explore: "Explore",
     discover: "Discover",
     missions: "Missions",

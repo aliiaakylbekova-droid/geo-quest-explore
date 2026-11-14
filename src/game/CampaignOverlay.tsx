@@ -39,19 +39,20 @@ export function CampaignOverlay() {
   if (stage === "flag" && lastFeedback) {
     if (lastFeedback.ok) {
       return (
-        <div className="gq-result is-ok" data-result="success">
-          <p className="kicker">{ui.greatJob}</p>
-          <h2>{ui.correctLocation}</h2>
-          <p className="place">{lastCountryName || mission?.targetName}</p>
-          <p>{mission?.recap}</p>
+        <div className="gq-ticket" data-result="ticket">
+          <div className="gq-fireworks" aria-hidden>
+            <i /><i /><i /><i /><i /><i />
+          </div>
+          <p className="kicker">{ui.congrats}</p>
+          <h2>{ui.greatJob}</h2>
+          <p className="gq-ticket-copy">{ui.nextTicket}</p>
         </div>
       )
     }
     return (
-      <div className="gq-result is-wrong" data-result="wrong">
+      <div className="gq-wrong-center" data-result="wrong">
         <p className="kicker">{ui.tryAgain}</p>
-        <h2>{ui.notThisPlace}</h2>
-        <p>{lastFeedback.text}</p>
+        <h2>{ui.flagWrong}</h2>
       </div>
     )
   }

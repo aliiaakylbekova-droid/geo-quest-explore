@@ -112,7 +112,12 @@ export const ru = {
   play: {
     geoGame: "ГЕО ИГРА",
     nickname: "Имя игрока",
-    start: "СТАРТ",
+    askName: "Как тебя зовут, исследователь?",
+    nickNext: "Далее",
+    helloExplorer: "Привет, {name}!",
+    start: "Начнём наше путешествие",
+    nextTicket: "Твой билет на следующее путешествие",
+    congrats: "Поздравляем!",
     explore: "Исследуй",
     discover: "Открой",
     missions: "Миссии",

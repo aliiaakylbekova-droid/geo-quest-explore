@@ -82,7 +82,6 @@ export function GameShell() {
     if (introPhase !== "ready") return
     audio.unlock()
     audio.play("ambient")
-    if (!campaign && progress.campaignIndex < GEO_CAMPAIGN.length) startCampaign(progress.campaignIndex)
   }, [introPhase])
 
   useEffect(() => {
@@ -186,6 +185,12 @@ export function GameShell() {
     if (kind === "shape") useGame.setState({ highlightIso: c.iso })
     setHintOn(false)
   }
+
+  useEffect(() => {
+    if (stage !== "flag" || !lastFeedback?.ok || !mission) return
+    const id = window.setTimeout(() => newFlagRound("flag"), 2800)
+    return () => window.clearTimeout(id)
+  }, [stage, lastFeedback?.ok, mission?.id])
 
   const discover = stage === "discover"
   const ui = t().play

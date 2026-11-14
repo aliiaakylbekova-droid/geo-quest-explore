@@ -26,6 +26,11 @@ export default function App() {
         const btn = Array.from(document.querySelectorAll("button")).find((b) => b.textContent?.includes("Флаги") || b.textContent?.includes("FLAGS"))
         btn?.click()
       },
+      flagTarget: () => useGame.getState().mission?.targetIso ?? null,
+      flyTarget: () => {
+        const m = useGame.getState().mission
+        if (m?.lat != null) useGame.getState().fly(m.lat, m.lng ?? 0, 3.05)
+      },
     }
   }, [])
 
