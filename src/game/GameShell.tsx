@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import "../index.css"
 import { audio } from "../audio/AudioManager"
 import { TutorialOverlay, tutorialDone } from "../screens/TutorialOverlay"
@@ -78,7 +78,10 @@ export function GameShell() {
   const [flagRound, setFlagRound] = useState<StoryMission | null>(null)
   const [hoverTip, setHoverTip] = useState<{ name: string; x: number; y: number } | null>(null)
   const [coach, setCoach] = useState(() => !tutorialDone())
+  const [moreOpen, setMoreOpen] = useState(false)
+  const lastTickSec = useRef<number | null>(null)
   const left = useTick(missionEndsAt)
+  const clockOn = Boolean(missionEndsAt) && (Boolean(campaign) || stage === "flag" || stage === "mission")
 
   useEffect(() => {
     void loadCatalog()
@@ -100,6 +103,19 @@ export function GameShell() {
     if (left > 0 || !missionEndsAt || campaignPhase === "timeout") return
     if (campaign || stage === "flag" || stage === "mission") tickTimeout()
   }, [left, campaign, stage, campaignPhase, missionEndsAt, tickTimeout])
+
+  useEffect(() => {
+    if (!clockOn || left <= 0 || campaignPhase === "timeout") {
+      lastTickSec.current = null
+      return
+    }
+    const sec = Math.ceil(left / 1000)
+    if (sec === lastTickSec.current) return
+    const prev = lastTickSec.current
+    lastTickSec.current = sec
+    if (prev === null) return
+    audio.play(sec <= 10 ? "tickWarn" : "tick")
+  }, [clockOn, left, campaignPhase])
 
   const country = selectedIso ? getCatalog()?.byIso.get(selectedIso) : undefined
   const landmark = LANDMARKS.find((l) => l.id === landmarkId) ?? LANDMARKS[0]
@@ -252,6 +268,11 @@ export function GameShell() {
           <strong>GEO QUEST</strong>
           <span className="pilot">{profile?.name}</span>
         </div>
+        {clockOn ? (
+          <div className={`hud-clock${left <= 10000 ? " is-warn" : ""}`} aria-live="polite">
+            {formatClock(left)}
+          </div>
+        ) : null}
         <div className="hud-xp">
           <span>
             {ui.level} {level}
@@ -471,84 +492,147 @@ export function GameShell() {
         </div>
       </aside>
 
-      <nav className="hud-bottom">
-        <button type="button" className={stage === "explore" ? "on" : ""} onClick={() => setStage("explore")}>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="12" r="8" />
-            <path d="M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16" />
-          </svg>
-          <span>{ui.explore}</span>
-        </button>
-        <button type="button" className={stage === "discover" ? "on" : ""} onClick={() => (landmarkId ? setStage("discover") : openLandmark("issyk"))}>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 4v4M12 16v4M4 12h4M16 12h4" />
-            <circle cx="12" cy="12" r="3" />
-          </svg>
-          <span>{ui.discover}</span>
-        </button>
-        <button
-          type="button"
-          className={stage === "mission" || Boolean(campaign) ? "on" : ""}
-          onClick={() => {
-            setStage("mission")
-            startCampaign(progress.campaignIndex < GEO_CAMPAIGN.length ? progress.campaignIndex : 0)
-          }}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M6 4h10l-2 4 2 4H6v8" />
-          </svg>
-          <span>{ui.missions}</span>
-        </button>
-        <button type="button" className={stage === "flag" ? "on" : ""} onClick={() => newFlagRound("flag")}>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M6 4v16M6 4h10l-2 4 2 4H6" />
-          </svg>
-          <span>{ui.flags}</span>
-        </button>
-        <select
-          className="mission-select"
-          defaultValue=""
-          onChange={(e) => {
-            const v = e.target.value
-            const story = STORY_MISSIONS.find((m) => m.id === v)
-            if (story) startMission(story)
-            if (FLAG_MODES.includes(v as (typeof FLAG_MODES)[number])) newFlagRound(v as (typeof FLAG_MODES)[number])
-            e.target.selectedIndex = 0
-          }}
-        >
-          <option value="" disabled>
-            {ui.assignment}
-          </option>
-          {STORY_MISSIONS.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.title}
-            </option>
-          ))}
-          <option value="flag">Охотник: флаг</option>
-          <option value="capital">Охотник: столица</option>
-          <option value="coords">Охотник: координаты</option>
-          <option value="neighbors">Охотник: соседи</option>
-          <option value="shape">Охотник: контур</option>
-        </select>
-        <button type="button" className={stage === "journal" ? "on" : ""} onClick={() => setStage("journal")}>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="6" y="4" width="12" height="16" rx="1" />
-            <path d="M9 8h6M9 12h6M9 16h4" />
-          </svg>
-          <span>{ui.journal}</span>
-        </button>
-        <button type="button" className={stage === "settings" ? "on" : ""} onClick={() => setStage("settings")}>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" />
-          </svg>
-          <span>{ui.profile}</span>
-        </button>
-        {(stage === "mission" || stage === "flag") && mission ? (
-          <button type="button" className="ghost" onClick={() => clearMission()}>
-            <span>{ui.surrender}</span>
+      <nav className={`hud-bottom${moreOpen ? " is-more" : ""}`}>
+        <div className="hud-nav-main">
+          <button
+            type="button"
+            className={stage === "explore" ? "on" : ""}
+            onClick={() => {
+              setMoreOpen(false)
+              setStage("explore")
+            }}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="8" />
+              <path d="M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16" />
+            </svg>
+            <span>{ui.explore}</span>
           </button>
-        ) : null}
+          <button
+            type="button"
+            className={stage === "discover" ? "on" : ""}
+            onClick={() => {
+              setMoreOpen(false)
+              if (landmarkId) setStage("discover")
+              else openLandmark("issyk")
+            }}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 4v4M12 16v4M4 12h4M16 12h4" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            <span>{ui.discover}</span>
+          </button>
+          <button
+            type="button"
+            className={stage === "mission" || Boolean(campaign) ? "on" : ""}
+            onClick={() => {
+              setMoreOpen(false)
+              setStage("mission")
+              startCampaign(progress.campaignIndex < GEO_CAMPAIGN.length ? progress.campaignIndex : 0)
+            }}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 4h10l-2 4 2 4H6v8" />
+            </svg>
+            <span>{ui.missions}</span>
+          </button>
+          <button
+            type="button"
+            className={stage === "flag" ? "on" : ""}
+            onClick={() => {
+              setMoreOpen(false)
+              newFlagRound("flag")
+            }}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 4v16M6 4h10l-2 4 2 4H6" />
+            </svg>
+            <span>{ui.flags}</span>
+          </button>
+          <button
+            type="button"
+            className={`hud-more-toggle${moreOpen || stage === "journal" || stage === "settings" ? " on" : ""}`}
+            aria-expanded={moreOpen}
+            aria-label={ui.more}
+            onClick={() => setMoreOpen((open) => !open)}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="6" cy="12" r="1.6" />
+              <circle cx="12" cy="12" r="1.6" />
+              <circle cx="18" cy="12" r="1.6" />
+            </svg>
+            <span>{ui.more}</span>
+          </button>
+        </div>
+        <div className="hud-nav-sheet">
+          <select
+            className="mission-select"
+            defaultValue=""
+            onChange={(e) => {
+              const v = e.target.value
+              const story = STORY_MISSIONS.find((m) => m.id === v)
+              if (story) startMission(story)
+              if (FLAG_MODES.includes(v as (typeof FLAG_MODES)[number])) newFlagRound(v as (typeof FLAG_MODES)[number])
+              e.target.selectedIndex = 0
+              setMoreOpen(false)
+            }}
+          >
+            <option value="" disabled>
+              {ui.assignment}
+            </option>
+            {STORY_MISSIONS.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.title}
+              </option>
+            ))}
+            <option value="flag">Охотник: флаг</option>
+            <option value="capital">Охотник: столица</option>
+            <option value="coords">Охотник: координаты</option>
+            <option value="neighbors">Охотник: соседи</option>
+            <option value="shape">Охотник: контур</option>
+          </select>
+          <button
+            type="button"
+            className={stage === "journal" ? "on" : ""}
+            onClick={() => {
+              setMoreOpen(false)
+              setStage("journal")
+            }}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="6" y="4" width="12" height="16" rx="1" />
+              <path d="M9 8h6M9 12h6M9 16h4" />
+            </svg>
+            <span>{ui.journal}</span>
+          </button>
+          <button
+            type="button"
+            className={stage === "settings" ? "on" : ""}
+            onClick={() => {
+              setMoreOpen(false)
+              setStage("settings")
+            }}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" />
+            </svg>
+            <span>{ui.profile}</span>
+          </button>
+          {(stage === "mission" || stage === "flag") && mission ? (
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => {
+                setMoreOpen(false)
+                clearMission()
+              }}
+            >
+              <span>{ui.surrender}</span>
+            </button>
+          ) : null}
+        </div>
       </nav>
       <CampaignOverlay />
       {introPhase === "ready" && coach ? <TutorialOverlay onDone={() => setCoach(false)} /> : null}

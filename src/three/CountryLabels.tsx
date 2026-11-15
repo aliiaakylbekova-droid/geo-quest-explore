@@ -1,8 +1,15 @@
 import { useFrame, useThree } from "@react-three/fiber"
 import { useMemo, useRef } from "react"
 import { CanvasTexture, Sprite, SRGBColorSpace, Vector3, type Group } from "three"
-import type { CountryRecord } from "../geo/catalog"
 import { EARTH_R, latLngToVec } from "./geo"
+
+export type LabelCountry = {
+  iso: string
+  name: string
+  lat: number
+  lng: number
+  pop?: number | null
+}
 
 const cache = new Map<string, CanvasTexture>()
 
@@ -34,14 +41,15 @@ export function CountryLabels({
   countries,
   visible,
 }: {
-  countries: CountryRecord[]
+  countries: LabelCountry[]
   visible: boolean
 }) {
   const { camera } = useThree()
   const group = useRef<Group>(null)
+  const scratch = useRef(new Vector3())
   const items = useMemo(() => {
     return countries
-      .filter((c) => c.iso.length === 2 && (c.pop ?? 0) > 12_000_000)
+      .filter((c) => c.iso.length === 2 && (c.pop ?? 0) > 8_000_000)
       .map((c) => ({
         iso: c.iso,
         name: c.name,
@@ -56,13 +64,13 @@ export function CountryLabels({
     g.visible = visible
     if (!visible) return
     const cam = camera.position
+    const dist = cam.length()
+    const s = dist > 7 ? 0.52 : dist > 5.2 ? 0.4 : 0.32
     for (const child of g.children) {
       const sp = child as Sprite
-      const world = sp.getWorldPosition(new Vector3())
-      const facing = world.dot(cam) > 2.2
-      const dist = cam.length()
-      sp.visible = facing && dist < 8.2
-      const s = dist > 5.5 ? 0.42 : 0.32
+      const world = sp.getWorldPosition(scratch.current)
+      const facing = world.dot(cam) > 0
+      sp.visible = facing
       sp.scale.set(s * 2.4, s * 0.6, 1)
     }
   })

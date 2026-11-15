@@ -12,6 +12,8 @@ type Sfx =
   | "missionComplete"
   | "timeout"
   | "gameOver"
+  | "tick"
+  | "tickWarn"
 
 class AudioManager {
   private ctx: AudioContext | null = null
@@ -104,6 +106,11 @@ class AudioManager {
     else if (name === "fail") {
       this.ping(196, 0.12, 0.2, "triangle")
       window.setTimeout(() => this.ping(131, 0.2, 0.18, "sine"), 40)
+    }
+    else if (name === "tick") this.ping(980, 0.04, 0.022, "sine")
+    else if (name === "tickWarn") {
+      this.ping(1174, 0.055, 0.07, "triangle")
+      window.setTimeout(() => this.ping(1568, 0.04, 0.045, "sine"), 28)
     }
     else if (name === "timeout") {
       this.ping(110, 0.22, 0.1, "sine")

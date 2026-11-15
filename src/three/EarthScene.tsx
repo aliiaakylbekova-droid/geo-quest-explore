@@ -16,10 +16,9 @@ import {
   type Mesh,
 } from "three"
 import { useGame } from "../store/gameStore"
-import type { CountryRecord, NamedLine } from "../geo/catalog"
+import type { NamedLine } from "../geo/catalog"
 import { isoOf, type Place } from "../geo/catalog"
 import { EARTH_R, cameraFor, geometryFromGeoJSON } from "./geo"
-import { CountryLabels } from "./CountryLabels"
 import { FlagPins } from "./FlagPins"
 import { GlobePick } from "./GlobePick"
 
@@ -33,7 +32,6 @@ export type Layers = {
 
 type Props = {
   features: GeoJSON.Feature[]
-  countries: CountryRecord[]
   cities: Place[]
   rivers: NamedLine[]
   lakes: NamedLine[]
@@ -94,7 +92,6 @@ function Atmosphere() {
 
 export function EarthScene({
   features,
-  countries,
   cities: _cities,
   rivers,
   lakes: _lakes,
@@ -121,7 +118,6 @@ export function EarthScene({
   const campaign = useGame((s) => s.campaign)
   const flagPins = useGame((s) => s.flagPins)
   const missionMode = stage === "mission" || Boolean(campaign)
-  const showNames = !missionMode && stage !== "discover"
   const strongBorders = missionMode || layers.borders
   const earth = useRef<Group>(null)
   const globeMesh = useRef<Mesh>(null)
@@ -278,10 +274,10 @@ export function EarthScene({
           <lineBasicMaterial ref={outlineMat} color="#5ee7ff" transparent opacity={0.98} />
         </lineSegments>
       ) : null}
-      <CountryLabels countries={countries} visible={showNames} />
       <FlagPins isos={flagPins} />
       </group>
       <OrbitControls
+        makeDefault
         enablePan={false}
         enableRotate
         enableZoom
@@ -292,6 +288,7 @@ export function EarthScene({
         rotateSpeed={0.55}
         enableDamping
         dampingFactor={0.078}
+        touches={{ ONE: 0, TWO: 2 }}
       />
     </group>
   )

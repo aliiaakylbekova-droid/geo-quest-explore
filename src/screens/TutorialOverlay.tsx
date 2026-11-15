@@ -25,11 +25,10 @@ export function TutorialOverlay({ onDone }: { onDone: () => void }) {
       <article className="gq-tutorial-card">
         <p className="kicker">{ui.geoGame}</p>
         <h2>{ui.tutorialTitle}</h2>
+        <p className="gq-tutorial-lead">{ui.tutorialLead}</p>
         <ul>
-          <li>{ui.tutorialHud}</li>
           <li>{ui.tutorialExplore}</li>
-          <li>{ui.tutorialMissions}</li>
-          <li>{ui.tutorialFlags}</li>
+          <li>{ui.tutorialHunt}</li>
           <li>{ui.tutorialClick}</li>
           <li>{ui.tutorialTimer}</li>
         </ul>

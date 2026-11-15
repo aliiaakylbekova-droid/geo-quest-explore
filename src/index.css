@@ -16,8 +16,27 @@
 html, body, #root { height: 100%; margin: 0; }
 body {
   overflow: hidden;
+  overscroll-behavior: none;
   background: radial-gradient(1200px 800px at 50% 40%, #0b1624 0%, #050b14 62%);
   color: var(--white);
+}
+html.gq-lock,
+body.gq-lock {
+  overflow: hidden;
+  overscroll-behavior: none;
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+}
+.world-canvas,
+.world-canvas canvas,
+.hud-center,
+.hud-center canvas {
+  touch-action: none;
+  overscroll-behavior: none;
 }
 button, input, select { font-family: inherit; }
 
@@ -128,6 +147,22 @@ button, input, select { font-family: inherit; }
 .pilot { color: var(--muted); font-size: 13px; }
 .hud-xp { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--cyan); letter-spacing: 0.04em; }
 .hud-xp .sep { width: 1px; height: 12px; background: var(--line); }
+.hud-clock {
+  display: none;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 0.1em;
+  color: var(--cyan);
+  text-shadow: 0 0 16px rgba(94, 231, 255, 0.45);
+  min-width: 4.8em;
+  text-align: center;
+  flex: 0 0 auto;
+}
+.hud-clock.is-warn {
+  color: #ffb38a;
+  animation: pulse 0.85s ease-in-out infinite;
+}
 
 .hud-left, .hud-right {
   top: 72px;
@@ -358,6 +393,7 @@ button, input, select { font-family: inherit; }
   bottom: 12px;
   height: 68px;
   display: flex;
+  flex-wrap: nowrap;
   gap: 8px;
   align-items: stretch;
   padding: 8px;
@@ -366,12 +402,17 @@ button, input, select { font-family: inherit; }
   background: var(--glass-2);
   backdrop-filter: blur(18px);
   box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.35);
-  overflow: hidden;
+  overflow: visible;
 }
+.hud-nav-main,
+.hud-nav-sheet {
+  display: contents;
+}
+.hud-bottom .hud-more-toggle { display: none; }
 
 .hud-bottom button {
   flex: 1 1 0;
-  min-width: 84px;
+  min-width: 0;
   border: 1px solid transparent;
   background: transparent;
   color: var(--muted);
@@ -387,6 +428,12 @@ button, input, select { font-family: inherit; }
   padding: 6px 4px;
   transition: color 0.18s ease, background 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
 }
+.hud-bottom button span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
 .hud-bottom button svg {
   width: 18px;
   height: 18px;
@@ -401,6 +448,10 @@ button, input, select { font-family: inherit; }
   background: linear-gradient(180deg, #8ff6ff, #5ee7ff);
   box-shadow: 0 0 20px rgba(94, 231, 255, 0.35);
 }
+.hud-more-toggle svg circle {
+  fill: currentColor;
+  stroke: none;
+}
 .hud-bottom .ghost { min-width: 72px; color: var(--white); border-color: var(--line); }
 
 .mission-select {
@@ -409,7 +460,8 @@ button, input, select { font-family: inherit; }
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 8px 10px;
-  min-width: 140px;
+  min-width: 0;
+  flex: 0 1 148px;
 }
 
 .register-hud .hud-center { inset: 0; }
@@ -547,8 +599,15 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
 }
 .gq-tutorial-card h2 {
   font-family: Cinzel, serif;
-  margin: 4px 0 12px;
+  margin: 4px 0 10px;
   letter-spacing: 0.08em;
+}
+.gq-tutorial-lead {
+  margin: 0 0 14px;
+  color: var(--cyan);
+  font-size: 16px;
+  line-height: 1.4;
+  font-weight: 650;
 }
 .gq-tutorial-card ul {
   margin: 0 0 16px;
@@ -929,10 +988,10 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
     overflow: hidden;
   }
   .hud-center {
-    top: 50px;
+    top: calc(50px + env(safe-area-inset-top, 0px));
     left: 0;
     right: 0;
-    bottom: 140px;
+    bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   }
   .intro-card, .start-plaque {
     width: min(360px, 92vw);
@@ -953,16 +1012,24 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
   .hud-top {
     left: 8px;
     right: 8px;
-    top: 6px;
-    height: 40px;
-    min-height: 40px;
+    top: calc(6px + env(safe-area-inset-top, 0px));
+    height: 44px;
+    min-height: 44px;
     padding: 4px 10px;
-    gap: 6px;
+    gap: 8px;
     flex-wrap: nowrap;
   }
   .brand strong { font-size: 11px; letter-spacing: 0.1em; }
   .pilot { font-size: 11px; }
-  .hud-xp { font-size: 10px; gap: 4px; white-space: nowrap; }
+  .hud-xp { font-size: 10px; gap: 4px; white-space: nowrap; min-width: 0; }
+  .hud-xp span:nth-child(n+4),
+  .hud-xp .sep:nth-child(n+3) { display: none; }
+  .hud-clock {
+    display: block;
+    font-size: 18px;
+    margin-left: auto;
+  }
+  .brand { min-width: 0; }
   .hud-left, .hud-right {
     top: auto;
     max-height: none;
@@ -972,14 +1039,14 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
     left: 8px;
     right: 86px;
     width: auto;
-    bottom: 68px;
+    bottom: calc(64px + env(safe-area-inset-bottom, 0px));
     height: 64px;
   }
   .hud-right {
     left: auto;
     right: 8px;
     width: 74px;
-    bottom: 68px;
+    bottom: calc(64px + env(safe-area-inset-bottom, 0px));
     height: 64px;
   }
   .hud-left .brief,
@@ -992,10 +1059,13 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
   .hud-right .stat-stack,
   .hud-right .layers,
   .hud-right .timer-idle,
+  .hud-right .timer-xl,
   .hud-right .country-card,
   .hud-right .tiny { display: none; }
-  .gq-live[data-stage="explore"] .hud-right { display: none; }
-  .gq-live[data-stage="explore"] .hud-left { right: 8px; }
+  .gq-live[data-stage="explore"] .hud-right,
+  .gq-live[data-stage="mission"] .hud-right { display: none; }
+  .gq-live[data-stage="explore"] .hud-left,
+  .gq-live[data-stage="mission"] .hud-left { right: 8px; }
   .hud-left .mission-card { padding: 6px 10px; height: 100%; overflow: hidden; }
   .hud-left .mission-no { margin: 0; font-size: 9px; }
   .hud-left .mission-card h3 { font-size: 14px; margin: 0 0 2px; }
@@ -1012,31 +1082,57 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
   .flag-hunt p, .flag-hunt .tiny { display: none; }
   .flag-xl { max-height: 40px; width: auto; }
   .hud-bottom {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: auto;
+    min-height: 56px;
+    padding: 4px 6px max(8px, env(safe-area-inset-bottom, 0px));
+    gap: 0;
+    border-radius: 16px 16px 0 0;
+    overflow: visible;
+  }
+  .hud-bottom .hud-more-toggle { display: flex; }
+  .hud-nav-main {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 2px;
+    width: 100%;
+  }
+  .hud-nav-sheet {
+    display: none;
+  }
+  .hud-bottom.is-more .hud-nav-sheet {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    position: absolute;
     left: 6px;
     right: 6px;
-    bottom: 6px;
-    height: 56px;
-    padding: 4px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    justify-content: flex-start;
-    -webkit-overflow-scrolling: touch;
+    bottom: calc(100% + 8px);
+    padding: 8px;
+    background: var(--glass-2);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  }
+  .hud-bottom.is-more .hud-nav-sheet .mission-select {
+    grid-column: 1 / -1;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    flex: none;
   }
   .hud-bottom button {
-    min-width: 52px;
+    min-width: 0;
+    width: auto;
+    flex: unset;
     min-height: 48px;
-    flex: 0 0 auto;
     font-size: 10px;
     gap: 2px;
     padding: 4px 2px;
   }
-  .hud-bottom .ghost { display: none; }
-  .mission-select {
-    min-width: 70px;
-    max-width: 84px;
-    font-size: 11px;
-    padding: 4px;
-  }
+  .hud-bottom .ghost { min-width: 0; }
   .gq-select-chip { top: 54px; font-size: 11px; }
   .gq-result { width: min(380px, 92vw); bottom: 140px; }
   .gq-hint-drawer {
@@ -1056,11 +1152,11 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
 }
 
 @media (max-width: 720px) and (max-height: 680px) {
-  .hud-center { top: 42px; bottom: 118px; }
-  .hud-top { height: 36px; min-height: 36px; top: 4px; }
-  .hud-left, .hud-right { height: 48px; bottom: 60px; }
+  .hud-center { top: calc(42px + env(safe-area-inset-top, 0px)); bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+  .hud-top { height: 40px; min-height: 40px; top: calc(4px + env(safe-area-inset-top, 0px)); }
+  .hud-left, .hud-right { height: 48px; bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
   .hud-left .goal { display: none; }
-  .hud-bottom { height: 52px; }
+  .hud-bottom { min-height: 52px; }
   .intro-card, .start-plaque { padding: 14px 12px; gap: 8px; }
   .gq-tutorial-card { max-height: 82dvh; padding: 12px; }
   .gq-tutorial-card ul { font-size: 12px; }

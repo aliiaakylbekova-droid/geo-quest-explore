@@ -1,3 +1,4 @@
+import countryNames from "../data/country-names.json"
 import { featureContains } from "./pip"
 
 export type CountryRecord = {
@@ -65,6 +66,8 @@ function centroid(coords: number[][]): [number, number] {
 let catalog: Catalog | null = null
 let pending: Promise<Catalog> | null = null
 
+const seedCountries = countryNames as CountryRecord[]
+
 export function getCatalog() {
   return catalog
 }
@@ -73,18 +76,42 @@ export function loadCatalog() {
   if (catalog) return Promise.resolve(catalog)
   if (pending) return pending
   pending = (async () => {
-    const [c110, places, rivers110, rivers50, lakes, marine, elev, index] = await Promise.all([
-      loadJson<GeoJSON.FeatureCollection>("geo/ne_110m_admin_0_countries.geojson"),
-      loadJson<GeoJSON.FeatureCollection>("geo/ne_110m_populated_places.geojson"),
-      loadJson<GeoJSON.FeatureCollection>("geo/ne_110m_rivers_lake_centerlines.geojson"),
-      loadJson<GeoJSON.FeatureCollection>("geo/ne_50m_rivers_lake_centerlines.geojson").catch(() => ({ features: [] })),
-      loadJson<GeoJSON.FeatureCollection>("geo/ne_110m_lakes.geojson"),
-      loadJson<GeoJSON.FeatureCollection>("geo/ne_110m_geography_marine_polys.geojson"),
-      loadJson<GeoJSON.FeatureCollection>("geo/ne_110m_geography_regions_elevation_points.geojson"),
-      loadJson<{ countries: CountryRecord[]; cities: Place[] }>("geo/index.json"),
-    ])
+    const c110 = await loadJson<GeoJSON.FeatureCollection>("geo/ne_110m_admin_0_countries.geojson")
+    const byIso = new Map<string, CountryRecord>(seedCountries.map((c) => [c.iso, c]))
+    catalog = {
+      countries: seedCountries,
+      byIso,
+      features: c110.features,
+      features50: null,
+      cities: [],
+      rivers: [],
+      lakes: [],
+      marine: [],
+      mountains: [],
+    }
+    void loadCatalogExtras()
+    return catalog
+  })()
+  return pending
+}
 
-    const byIso = new Map<string, CountryRecord>(index.countries.map((c) => [c.iso, c]))
+async function loadCatalogExtras() {
+  if (!catalog) return
+  const [places, rivers110, rivers50, lakes, marine, elev, index] = await Promise.all([
+    loadJson<GeoJSON.FeatureCollection>("geo/ne_110m_populated_places.geojson"),
+    loadJson<GeoJSON.FeatureCollection>("geo/ne_110m_rivers_lake_centerlines.geojson"),
+    loadJson<GeoJSON.FeatureCollection>("geo/ne_50m_rivers_lake_centerlines.geojson").catch(() => ({ features: [] })),
+    loadJson<GeoJSON.FeatureCollection>("geo/ne_110m_lakes.geojson"),
+    loadJson<GeoJSON.FeatureCollection>("geo/ne_110m_geography_marine_polys.geojson"),
+    loadJson<GeoJSON.FeatureCollection>("geo/ne_110m_geography_regions_elevation_points.geojson"),
+    loadJson<{ countries: CountryRecord[]; cities: Place[] }>("geo/index.json"),
+  ])
+
+  const host = catalog
+  if (index.countries.length) {
+    host.countries = index.countries
+    host.byIso = new Map<string, CountryRecord>(index.countries.map((c) => [c.iso, c]))
+  }
     const riverSrc = rivers50.features.length > 20 ? rivers50 : rivers110
     const rivers: NamedLine[] = riverSrc.features.flatMap((f) => {
       const name = String(f.properties?.name_ru || f.properties?.name || f.properties?.NAME || "")
@@ -149,20 +176,11 @@ export function loadCatalog() {
         }
       })
 
-    catalog = {
-      countries: index.countries,
-      byIso,
-      features: c110.features,
-      features50: null,
-      cities,
-      rivers,
-      lakes: lakeLines,
-      marine: marineLines,
-      mountains,
-    }
-    return catalog
-  })()
-  return pending
+  host.cities = cities
+  host.rivers = rivers
+  host.lakes = lakeLines
+  host.marine = marineLines
+  host.mountains = mountains
 }
 
 export async function loadHiResCountries() {
@@ -213,6 +231,8 @@ export const NEIGHBORS: Record<string, string[]> = {
   IN: ["PK", "CN", "NP", "BT", "BD", "MM"],
   DE: ["FR", "NL", "BE", "LU", "CH", "AT", "CZ", "PL", "DK"],
 }
+
+void loadCatalog()
 
 export const LANDMARKS = [
   {
