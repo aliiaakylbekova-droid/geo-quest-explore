@@ -195,8 +195,8 @@ export const useGame = create<GameState>((set, get) => ({
         progress,
         displayXp: progress.xp,
         ready: true,
-        stage: nextProfile ? "explore" : "register",
-        introPhase: nextProfile ? "approach" : "card",
+        stage: "register",
+        introPhase: "card",
       })
     } catch {
       set({ ready: true, stage: "register", progress: defaultProgress(), introPhase: "card" })
@@ -210,7 +210,6 @@ export const useGame = create<GameState>((set, get) => ({
     const progress = grant(get().progress, "first-step")
     await persist(progress, profile)
     audio.unlock()
-    audio.play("start")
     audio.play("ambient")
     set({ profile, progress, displayXp: progress.xp, stage: "explore", introPhase: "approach" })
   },
@@ -598,6 +597,7 @@ export const useGame = create<GameState>((set, get) => ({
     if (!st.campaign && !(st.mission && (st.stage === "flag" || st.stage === "mission"))) return
     audio.unlock()
     audio.play("timeout")
+    window.setTimeout(() => audio.play("gameOver"), 380)
     audio.play("ambient")
     const progress = {
       ...st.progress,

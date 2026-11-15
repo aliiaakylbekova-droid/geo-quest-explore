@@ -36,6 +36,9 @@ export default function App() {
         useGame.getState().tickTimeout()
       },
       coins: () => useGame.getState().progress.coins,
+      skipTutorial: () => {
+        localStorage.setItem("gq-tutorial-done", "1")
+      },
     }
   }, [])
 

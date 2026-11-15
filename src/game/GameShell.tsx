@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import "../index.css"
 import { audio } from "../audio/AudioManager"
+import { TutorialOverlay, tutorialDone } from "../screens/TutorialOverlay"
 import { GEO_CAMPAIGN } from "../data/campaign"
 import { LANDMARKS, NEIGHBORS, getCatalog, loadCatalog } from "../geo/catalog"
 import { formatClock } from "./logic"
@@ -76,6 +77,7 @@ export function GameShell() {
   const [point, setPoint] = useState<{ title: string; text: string } | null>(null)
   const [flagRound, setFlagRound] = useState<StoryMission | null>(null)
   const [hoverTip, setHoverTip] = useState<{ name: string; x: number; y: number } | null>(null)
+  const [coach, setCoach] = useState(() => !tutorialDone())
   const left = useTick(missionEndsAt)
 
   useEffect(() => {
@@ -226,7 +228,14 @@ export function GameShell() {
             : mission?.story
 
   return (
-    <div className={`gq-live hud intro-${introPhase}${screenFlash === "red" ? " is-flash-red" : ""}`} data-hud="explorer-v2" data-intro={introPhase}>
+    <div
+      className={`gq-live hud intro-${introPhase}${screenFlash === "red" ? " is-flash-red" : ""}`}
+      data-hud="explorer-v2"
+      data-intro={introPhase}
+      onClickCapture={(e) => {
+        if ((e.target as HTMLElement).closest("button, select")) audio.play("startClick")
+      }}
+    >
       {screenFlash === "red" ? <div className="gq-flash-red" aria-hidden /> : null}
       <header className="hud-top">
         <div className="brand">
@@ -532,6 +541,7 @@ export function GameShell() {
         ) : null}
       </nav>
       <CampaignOverlay />
+      {introPhase === "ready" && coach ? <TutorialOverlay onDone={() => setCoach(false)} /> : null}
     </div>
   )
 }

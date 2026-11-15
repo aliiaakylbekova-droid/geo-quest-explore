@@ -41,7 +41,8 @@ export function CampaignOverlay() {
   if (phase === "timeout") {
     return (
       <div className="gq-timeout-end" data-result="timeout">
-        <p className="gq-verdict is-timeout">{ui.timesUp}</p>
+        <p className="gq-verdict is-timeout">{ui.gameOver}</p>
+        <p className="gq-timeout-sub">{ui.timesUp}</p>
         <p className="gq-penalty">{ui.scorePenalty.replace("{n}", String(lastPenalty || 20))}</p>
         <button type="button" className="btn intro-start" onClick={() => restartAfterTimeout()}>
           {ui.restart}

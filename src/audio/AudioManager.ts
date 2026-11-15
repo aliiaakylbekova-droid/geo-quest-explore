@@ -11,6 +11,7 @@ type Sfx =
   | "transition"
   | "missionComplete"
   | "timeout"
+  | "gameOver"
 
 class AudioManager {
   private ctx: AudioContext | null = null
@@ -19,6 +20,8 @@ class AudioManager {
   private sfxBus: GainNode | null = null
   private ambientNodes: OscillatorNode[] = []
   private ambientGain: GainNode | null = null
+  private motifTimer = 0
+  private motifStep = 0
   unlocked = false
   musicOn = true
   sfxOn = true
@@ -106,6 +109,12 @@ class AudioManager {
       window.setTimeout(() => this.blip(147, 0.13, "square"), 130)
       window.setTimeout(() => this.sweep(130, 42, 0.55, 0.15), 270)
     }
+    else if (name === "gameOver") {
+      this.sweep(196, 55, 1.05, 0.16)
+      this.blip(98, 0.45, "sine")
+      window.setTimeout(() => this.blip(73, 0.55, "triangle"), 220)
+      window.setTimeout(() => this.sweep(110, 40, 0.8, 0.12), 480)
+    }
     else if (name === "xp") this.blip(880, 0.06, "sine")
     else if (name === "unlock") this.arpeggio([659, 784, 988, 1175], 0.08, 0.1)
     else if (name === "transition") this.sweep(240, 640, 0.55, 0.06)
@@ -155,10 +164,29 @@ class AudioManager {
     })
   }
 
+  private musicTone(freq: number, dur: number, vol: number) {
+    if (!this.musicOn || !this.ctx || !this.musicBus) return
+    const t = this.ctx.currentTime
+    const osc = this.ctx.createOscillator()
+    const g = this.ctx.createGain()
+    osc.type = "sine"
+    osc.frequency.setValueAtTime(freq, t)
+    g.gain.setValueAtTime(0.0001, t)
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.04)
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
+    osc.connect(g)
+    g.connect(this.musicBus)
+    osc.start(t)
+    osc.stop(t + dur + 0.02)
+  }
+
   startAmbient() {
     if (!this.unlocked || !this.musicOn) return
     const ctx = this.ensure()
-    if (this.ambientGain) return
+    if (this.ambientGain) {
+      this.ensureMotif()
+      return
+    }
     const g = ctx.createGain()
     g.gain.value = 0.0001
     g.connect(this.musicBus!)
@@ -175,12 +203,28 @@ class AudioManager {
       osc.start()
       return osc
     })
-    g.gain.exponentialRampToValueAtTime(0.07, ctx.currentTime + 1.4)
+    g.gain.exponentialRampToValueAtTime(0.055, ctx.currentTime + 1.4)
     this.ambientGain = g
+    this.ensureMotif()
+  }
+
+  private ensureMotif() {
+    if (this.motifTimer) return
+    const notes = [196, 247, 294, 247, 220, 165, 196, 147]
+    const tick = () => {
+      this.musicTone(notes[this.motifStep % notes.length], 0.58, 0.022)
+      this.motifStep += 1
+    }
+    tick()
+    this.motifTimer = window.setInterval(tick, 760)
   }
 
   stopAmbient() {
     const ctx = this.ctx
+    if (this.motifTimer) {
+      window.clearInterval(this.motifTimer)
+      this.motifTimer = 0
+    }
     if (this.ambientGain && ctx) {
       this.ambientGain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.4)
     }
