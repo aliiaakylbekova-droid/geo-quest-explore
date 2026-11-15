@@ -288,15 +288,14 @@ export function GameShell() {
           <span className="sep" />
           <span>{progress.xp} XP</span>
           <span className="sep" />
-          <span>
-            {progress.campaignDone.length}/{GEO_CAMPAIGN.length}
-          </span>
+          <span>◆ {progress.coins}</span>
         </div>
         <button type="button" className="hud-exit" onClick={requestExit}>
           {ui.exit}
         </button>
       </header>
 
+      <div className="hud-stack">
       <aside className="hud-left">
         <article className="mission-card" key={stage + (mission?.id ?? "")}>
             <p className="mission-no">
@@ -391,30 +390,14 @@ export function GameShell() {
         </article>
       </aside>
 
-      <main className="hud-center">
-        <StageView
-          discover={discover}
-          scene={landmark.scene}
-          onPick={judge}
-          onPoint={(title, text) => setPoint({ title, text })}
-          onHover={(hit) => {
-            if (hideNames || !hit?.name) setHoverTip(null)
-            else setHoverTip({ name: hit.name, x: hit.x, y: hit.y })
-          }}
-        />
-        {!hideNames && hoverTip ? (
-          <div className="gq-tip" style={{ left: hoverTip.x, top: hoverTip.y }}>
-            {hoverTip.name}
+      <aside className="hud-right">
+        {stage === "flag" && flagRound?.targetIso ? (
+          <div className="flag-hunt">
+            <p>{ui.clickFlag}</p>
+            <FlagImg iso={flagRound.targetIso} />
+            {flagRound.kind !== "flag" ? <p className="tiny">{flagRound.story}</p> : null}
           </div>
         ) : null}
-        {!hideNames && lastCountryName && (hitTint === "gold" || hitTint === "cyan" || selectedIso) ? (
-          <div className={`gq-select-chip tint-${hitTint || "cyan"}`}>{lastCountryName}</div>
-        ) : !hideNames && country ? (
-          <div className="gq-select-chip">{country.name}</div>
-        ) : null}
-      </main>
-
-      <aside className="hud-right">
         {campaign && campaignPhase === "play" ? (
           <div className="timer-xl" key={campaign.id}>
             {formatClock(left)}
@@ -444,13 +427,6 @@ export function GameShell() {
             <b>◆ {progress.coins}</b>
           </div>
         </div>
-        {stage === "flag" && flagRound?.targetIso ? (
-          <div className="flag-hunt">
-            <p>{ui.clickFlag}</p>
-            <FlagImg iso={flagRound.targetIso} />
-            {flagRound.kind !== "flag" ? <p className="tiny">{flagRound.story}</p> : null}
-          </div>
-        ) : null}
         {stage !== "flag" && country ? (
           <div className="country-card" key={country.iso}>
             <img className="flag-sm" src={`${import.meta.env.BASE_URL}flags/${country.iso.toLowerCase()}.svg`} alt="" />
@@ -502,6 +478,30 @@ export function GameShell() {
           ))}
         </div>
       </aside>
+      </div>
+
+      <main className="hud-center">
+        <StageView
+          discover={discover}
+          scene={landmark.scene}
+          onPick={judge}
+          onPoint={(title, text) => setPoint({ title, text })}
+          onHover={(hit) => {
+            if (hideNames || !hit?.name) setHoverTip(null)
+            else setHoverTip({ name: hit.name, x: hit.x, y: hit.y })
+          }}
+        />
+        {!hideNames && hoverTip ? (
+          <div className="gq-tip" style={{ left: hoverTip.x, top: hoverTip.y }}>
+            {hoverTip.name}
+          </div>
+        ) : null}
+        {!hideNames && lastCountryName && (hitTint === "gold" || hitTint === "cyan" || selectedIso) ? (
+          <div className={`gq-select-chip tint-${hitTint || "cyan"}`}>{lastCountryName}</div>
+        ) : !hideNames && country ? (
+          <div className="gq-select-chip">{country.name}</div>
+        ) : null}
+      </main>
 
       <nav className={`hud-bottom${moreOpen ? " is-more" : ""}`}>
         <div className="hud-nav-main">

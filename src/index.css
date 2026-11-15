@@ -207,6 +207,9 @@ button, input, select { font-family: inherit; }
 
 .hud-left { left: 16px; }
 .hud-right { right: 16px; }
+.hud-stack { pointer-events: none; }
+.hud-stack .hud-left,
+.hud-stack .hud-right { pointer-events: auto; }
 
 .mission-card, .country-card, .stat-stack, .flag-hunt {
   background: var(--glass);
@@ -1051,8 +1054,6 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
   .brand strong { font-size: 11px; letter-spacing: 0.1em; }
   .pilot { display: none; }
   .hud-xp { font-size: 10px; gap: 4px; white-space: nowrap; min-width: 0; }
-  .hud-xp span:nth-child(n+4),
-  .hud-xp .sep:nth-child(n+3) { display: none; }
   .hud-clock {
     display: block;
     font-size: 16px;
@@ -1074,57 +1075,107 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
     background: rgba(40, 16, 12, 0.9);
   }
   .brand { min-width: 0; }
-  .hud-left, .hud-right {
-    top: auto;
-    max-height: none;
-    overflow: hidden;
-  }
-  .hud-left {
+  .hud-stack {
+    position: absolute;
+    z-index: 3;
+    top: calc(52px + env(safe-area-inset-top, 0px));
     left: 8px;
-    right: 86px;
-    width: auto;
-    bottom: calc(64px + env(safe-area-inset-bottom, 0px));
-    height: 64px;
-  }
-  .hud-right {
-    left: auto;
     right: 8px;
-    width: 74px;
-    bottom: calc(64px + env(safe-area-inset-bottom, 0px));
-    height: 64px;
+    bottom: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: min(58vh, 480px);
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    pointer-events: none;
   }
-  .hud-left .brief,
-  .hud-left .mission-progress,
-  .hud-left .xp-reward,
-  .hud-left .hint-box,
-  .hud-left .recap,
-  .hud-left .btn,
-  .hud-left .journal,
-  .hud-right .stat-stack,
-  .hud-right .layers,
-  .hud-right .timer-idle,
-  .hud-right .timer-xl,
-  .hud-right .country-card,
-  .hud-right .tiny { display: none; }
-  .gq-live[data-stage="explore"] .hud-right,
-  .gq-live[data-stage="mission"] .hud-right { display: none; }
-  .gq-live[data-stage="explore"] .hud-left,
-  .gq-live[data-stage="mission"] .hud-left { right: 8px; }
-  .hud-left .mission-card { padding: 6px 10px; height: 100%; overflow: hidden; }
+  .hud-stack::-webkit-scrollbar { display: none; }
+  .hud-stack .hud-left,
+  .hud-stack .hud-right {
+    display: contents;
+  }
+  .hud-stack .flag-hunt,
+  .hud-stack .mission-card,
+  .hud-stack .timer-xl,
+  .hud-stack .timer-idle,
+  .hud-stack .stat-stack,
+  .hud-stack .layers,
+  .hud-stack .country-card {
+    pointer-events: auto;
+  }
+  .hud-stack .flag-hunt { order: 1; }
+  .hud-stack .mission-card { order: 2; }
+  .hud-stack .timer-xl,
+  .hud-stack .timer-idle { order: 3; }
+  .hud-stack .stat-stack { order: 4; }
+  .hud-stack .layers { order: 5; }
+  .hud-stack .country-card { order: 6; }
+  .hud-left .mission-card { padding: 8px 10px; height: auto; overflow: visible; }
   .hud-left .mission-no { margin: 0; font-size: 9px; }
   .hud-left .mission-card h3 { font-size: 14px; margin: 0 0 2px; }
-  .hud-left .goal { margin: 0; font-size: 12px; line-height: 1.25; }
+  .hud-left .goal { margin: 0 0 4px; font-size: 12px; line-height: 1.25; }
+  .hud-left .brief {
+    margin: 0 0 4px;
+    font-size: 11px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .hud-left .xp-reward { margin: 0 0 4px; font-size: 11px; }
+  .hud-left .mission-progress { display: none; }
+  .hud-left .btn.ghost { min-height: 34px; padding: 4px 10px; font-size: 12px; }
   .timer-xl {
     font-size: 18px;
     margin: 0;
-    padding: 4px 6px;
+    padding: 4px 8px;
     background: var(--glass);
     border-radius: 10px;
     border: 1px solid var(--line);
   }
-  .flag-hunt { padding: 4px; }
-  .flag-hunt p, .flag-hunt .tiny { display: none; }
-  .flag-xl { max-height: 40px; width: auto; }
+  .hud-right .timer-idle { font-size: 11px; margin: 0; padding: 4px 8px; }
+  .stat-stack {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    margin: 0;
+  }
+  .stat-stack .stat { margin: 0; }
+  .stat-stack .xp-track { flex: 1 1 120px; min-width: 100px; margin: 0; }
+  .hud-right .tiny { display: none; }
+  .hud-right .layers {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+  }
+  .hud-right .layer-sw {
+    padding: 4px 8px;
+    font-size: 10px;
+    gap: 6px;
+    width: auto;
+  }
+  .hud-right .layer-knob { width: 22px; height: 12px; }
+  .hud-right .layer-knob::after { width: 8px; height: 8px; }
+  .hud-right .layer-sw.on .layer-knob::after { transform: translateX(10px); }
+  .flag-hunt {
+    padding: 8px 10px;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .flag-hunt p { display: block; margin: 0; font-size: 13px; text-align: center; }
+  .flag-hunt .tiny { display: block; font-size: 12px; text-align: center; }
+  .flag-xl { max-height: 88px; width: auto; min-height: 52px; }
   .hud-bottom {
     left: 0;
     right: 0;
@@ -1205,8 +1256,13 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
 @media (max-width: 720px) and (max-height: 680px) {
   .hud-center { top: calc(42px + env(safe-area-inset-top, 0px)); bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
   .hud-top { height: 40px; min-height: 40px; top: calc(4px + env(safe-area-inset-top, 0px)); }
-  .hud-left, .hud-right { height: 48px; bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
-  .hud-left .goal { display: none; }
+  .hud-stack {
+    top: calc(46px + env(safe-area-inset-top, 0px));
+    max-height: min(50vh, 360px);
+    gap: 4px;
+  }
+  .flag-xl { max-height: 72px; min-height: 48px; }
+  .timer-xl { font-size: 18px; }
   .hud-bottom { min-height: 52px; }
   .intro-card, .start-plaque { padding: 14px 12px; gap: 8px; }
   .gq-tutorial-card { max-height: 82dvh; padding: 12px; }
