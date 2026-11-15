@@ -19,14 +19,13 @@ class AudioManager {
   private musicBus: GainNode | null = null
   private sfxBus: GainNode | null = null
   private ambientNodes: OscillatorNode[] = []
+  private ambientSources: AudioBufferSourceNode[] = []
   private ambientGain: GainNode | null = null
-  private motifTimer = 0
-  private motifStep = 0
   unlocked = false
   musicOn = true
   sfxOn = true
-  musicVol = 0.32
-  sfxVol = 0.7
+  musicVol = 0.38
+  sfxVol = 0.72
   masterVol = 0.7
 
   private ensure() {
@@ -91,142 +90,152 @@ class AudioManager {
       this.startAmbient()
       return
     }
-    if (name === "startClick") this.blip(520, 0.09, "triangle")
-    else if (name === "start") this.arpeggio([196, 247, 294, 392], 0.12, 0.16)
-    else if (name === "zoom") this.sweep(180, 520, 0.42, 0.08)
-    else if (name === "discovery") this.arpeggio([523, 659, 784], 0.1, 0.11)
+    if (name === "startClick") this.ping(880, 0.045, 0.035, "sine")
+    else if (name === "start") {
+      this.ping(196, 0.42, 0.05, "sine")
+      this.ping(294, 0.5, 0.04, "sine")
+    }
+    else if (name === "zoom") this.sweep(90, 160, 0.35, 0.03, "sine")
+    else if (name === "discovery") this.ping(523, 0.16, 0.05, "sine")
     else if (name === "success") {
-      this.arpeggio([523, 659, 784, 1046], 0.08, 0.12)
-      this.blip(1318, 0.1, "sine")
+      this.ping(659, 0.14, 0.2, "sine")
+      window.setTimeout(() => this.ping(988, 0.2, 0.16, "sine"), 45)
     }
     else if (name === "fail") {
-      this.sweep(320, 68, 0.44, 0.16)
-      this.blip(62, 0.24, "sine")
-      window.setTimeout(() => this.sweep(190, 48, 0.28, 0.09), 70)
+      this.ping(196, 0.12, 0.2, "triangle")
+      window.setTimeout(() => this.ping(131, 0.2, 0.18, "sine"), 40)
     }
     else if (name === "timeout") {
-      this.blip(196, 0.11, "square")
-      window.setTimeout(() => this.blip(147, 0.13, "square"), 130)
-      window.setTimeout(() => this.sweep(130, 42, 0.55, 0.15), 270)
+      this.ping(110, 0.22, 0.1, "sine")
+      window.setTimeout(() => this.ping(82, 0.32, 0.09, "sine"), 220)
     }
     else if (name === "gameOver") {
-      this.sweep(196, 55, 1.05, 0.16)
-      this.blip(98, 0.45, "sine")
-      window.setTimeout(() => this.blip(73, 0.55, "triangle"), 220)
-      window.setTimeout(() => this.sweep(110, 40, 0.8, 0.12), 480)
+      this.sweep(147, 55, 1.4, 0.09, "sine")
+      this.ping(98, 0.8, 0.08, "sine")
+      window.setTimeout(() => this.ping(73, 1.1, 0.07, "triangle"), 280)
     }
-    else if (name === "xp") this.blip(880, 0.06, "sine")
-    else if (name === "unlock") this.arpeggio([659, 784, 988, 1175], 0.08, 0.1)
-    else if (name === "transition") this.sweep(240, 640, 0.55, 0.06)
-    else if (name === "missionComplete") this.arpeggio([262, 330, 392, 523, 659], 0.12, 0.15)
+    else if (name === "xp") this.ping(740, 0.05, 0.04, "sine")
+    else if (name === "unlock") this.ping(523, 0.18, 0.06, "sine")
+    else if (name === "transition") this.sweep(120, 180, 0.4, 0.03, "sine")
+    else if (name === "missionComplete") {
+      this.ping(392, 0.28, 0.08, "sine")
+      window.setTimeout(() => this.ping(523, 0.35, 0.07, "sine"), 160)
+    }
   }
 
-  private bus() {
-    return this.sfxBus!
-  }
-
-  private blip(freq: number, dur: number, type: OscillatorType) {
+  private ping(freq: number, dur: number, vol: number, type: OscillatorType) {
     if (!this.sfxOn || !this.ctx || !this.sfxBus) return
     const t = this.ctx.currentTime
     const osc = this.ctx.createOscillator()
     const g = this.ctx.createGain()
     osc.type = type
     osc.frequency.setValueAtTime(freq, t)
-    g.gain.setValueAtTime(0.0001, t)
-    g.gain.exponentialRampToValueAtTime(0.12, t + 0.02)
+    g.gain.setValueAtTime(Math.max(0.0001, vol), t)
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
     osc.connect(g)
-    g.connect(this.bus())
+    g.connect(this.sfxBus)
     osc.start(t)
-    osc.stop(t + dur + 0.02)
+    osc.stop(t + dur + 0.03)
   }
 
-  private sweep(from: number, to: number, dur: number, vol: number) {
+  private sweep(from: number, to: number, dur: number, vol: number, type: OscillatorType = "sine") {
     if (!this.sfxOn || !this.ctx || !this.sfxBus) return
     const t = this.ctx.currentTime
     const osc = this.ctx.createOscillator()
     const g = this.ctx.createGain()
-    osc.type = "sine"
+    osc.type = type
     osc.frequency.setValueAtTime(from, t)
     osc.frequency.exponentialRampToValueAtTime(Math.max(40, to), t + dur)
     g.gain.setValueAtTime(0.0001, t)
-    g.gain.exponentialRampToValueAtTime(vol, t + 0.04)
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.05)
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
     osc.connect(g)
-    g.connect(this.bus())
+    g.connect(this.sfxBus)
     osc.start(t)
-    osc.stop(t + dur + 0.02)
+    osc.stop(t + dur + 0.03)
   }
 
-  private arpeggio(notes: number[], step: number, dur: number) {
-    notes.forEach((n, i) => {
-      window.setTimeout(() => this.blip(n, dur, i % 2 ? "triangle" : "sine"), i * step * 1000)
-    })
-  }
-
-  private musicTone(freq: number, dur: number, vol: number) {
-    if (!this.musicOn || !this.ctx || !this.musicBus) return
-    const t = this.ctx.currentTime
-    const osc = this.ctx.createOscillator()
-    const g = this.ctx.createGain()
-    osc.type = "sine"
-    osc.frequency.setValueAtTime(freq, t)
-    g.gain.setValueAtTime(0.0001, t)
-    g.gain.exponentialRampToValueAtTime(vol, t + 0.04)
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
-    osc.connect(g)
-    g.connect(this.musicBus)
-    osc.start(t)
-    osc.stop(t + dur + 0.02)
+  private noiseBuffer(ctx: AudioContext) {
+    const len = ctx.sampleRate * 6
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate)
+    const data = buf.getChannelData(0)
+    let last = 0
+    for (let i = 0; i < len; i += 1) {
+      const white = Math.random() * 2 - 1
+      last = (last + 0.015 * white) / 1.015
+      data[i] = last * 4.2
+    }
+    return buf
   }
 
   startAmbient() {
     if (!this.unlocked || !this.musicOn) return
     const ctx = this.ensure()
-    if (this.ambientGain) {
-      this.ensureMotif()
-      return
-    }
+    if (this.ambientGain) return
     const g = ctx.createGain()
     g.gain.value = 0.0001
     g.connect(this.musicBus!)
-    const freqs = [98, 146.8, 196, 246.9]
-    this.ambientNodes = freqs.map((f, i) => {
+
+    const pads = [
+      { f: 55, type: "sine" as OscillatorType },
+      { f: 82.4, type: "sine" as OscillatorType },
+      { f: 110, type: "triangle" as OscillatorType },
+      { f: 164.8, type: "sine" as OscillatorType },
+    ]
+    this.ambientNodes = pads.map((pad) => {
       const osc = ctx.createOscillator()
-      osc.type = i % 2 ? "triangle" : "sine"
-      osc.frequency.value = f
+      osc.type = pad.type
+      osc.frequency.value = pad.f
       const filt = ctx.createBiquadFilter()
       filt.type = "lowpass"
-      filt.frequency.value = 720
+      filt.frequency.value = 420
+      filt.Q.value = 0.4
       osc.connect(filt)
       filt.connect(g)
       osc.start()
       return osc
     })
-    g.gain.exponentialRampToValueAtTime(0.055, ctx.currentTime + 1.4)
-    this.ambientGain = g
-    this.ensureMotif()
-  }
 
-  private ensureMotif() {
-    if (this.motifTimer) return
-    const notes = [196, 247, 294, 247, 220, 165, 196, 147]
-    const tick = () => {
-      this.musicTone(notes[this.motifStep % notes.length], 0.58, 0.022)
-      this.motifStep += 1
-    }
-    tick()
-    this.motifTimer = window.setInterval(tick, 760)
+    const lfo = ctx.createOscillator()
+    lfo.type = "sine"
+    lfo.frequency.value = 0.05
+    const lfoGain = ctx.createGain()
+    lfoGain.gain.value = 0.012
+    lfo.connect(lfoGain)
+    lfoGain.connect(g.gain)
+    lfo.start()
+    this.ambientNodes.push(lfo)
+
+    const noise = ctx.createBufferSource()
+    noise.buffer = this.noiseBuffer(ctx)
+    noise.loop = true
+    const noiseFilt = ctx.createBiquadFilter()
+    noiseFilt.type = "lowpass"
+    noiseFilt.frequency.value = 280
+    const noiseGain = ctx.createGain()
+    noiseGain.gain.value = 0.018
+    noise.connect(noiseFilt)
+    noiseFilt.connect(noiseGain)
+    noiseGain.connect(g)
+    noise.start()
+    this.ambientSources = [noise]
+
+    g.gain.exponentialRampToValueAtTime(0.045, ctx.currentTime + 2.4)
+    this.ambientGain = g
   }
 
   stopAmbient() {
     const ctx = this.ctx
-    if (this.motifTimer) {
-      window.clearInterval(this.motifTimer)
-      this.motifTimer = 0
-    }
+    this.ambientSources.forEach((s) => {
+      try {
+        s.stop()
+      } catch {
+        /* already stopped */
+      }
+    })
+    this.ambientSources = []
     if (this.ambientGain && ctx) {
-      this.ambientGain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.4)
+      this.ambientGain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.6)
     }
     this.ambientNodes.forEach((o) => {
       try {
