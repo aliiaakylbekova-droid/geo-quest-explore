@@ -298,13 +298,16 @@ export const useGame = create<GameState>((set, get) => ({
       }
       const pins =
         useFlag && hit.iso && !st.flagPins.includes(hit.iso) ? [...st.flagPins, hit.iso] : st.flagPins
+      let scored = { ...progress, xp: progress.xp + reward, coins: progress.coins + 20 }
+      if (scored.xp >= 500) scored = grant(scored, "xp-500")
       set({
         selectedIso: hit.iso,
         highlightIso: hit.iso,
         lastHit: hit,
         lastCountryName: name,
-        progress,
-        campaignPhase: useCampaign ? "correct" : st.campaignPhase,
+        progress: scored,
+        displayXp: scored.xp,
+        campaignPhase: useCampaign ? "success" : st.campaignPhase,
         hitTint: "gold",
         spinBoost: 0,
         flagPins: pins,
@@ -312,25 +315,14 @@ export const useGame = create<GameState>((set, get) => ({
         flagMoment: useFlag ? "win" : get().flagMoment,
         lastFeedback: { ok: true, text: t().play.correctLocation },
       })
-      window.setTimeout(() => {
-        const now = get()
-        let next = { ...now.progress, xp: now.progress.xp + reward, coins: now.progress.coins + 20 }
-        if (next.xp >= 500) next = grant(next, "xp-500")
-        for (let i = 0; i < 6; i += 1) window.setTimeout(() => audio.play("xp"), 80 * i)
-        set({
-          campaignPhase: useCampaign ? "success" : now.campaignPhase,
-          hitTint: "cyan",
-          progress: next,
-          lastFeedback: { ok: true, text: t().play.greatJob },
-        })
-        void persist(next)
-        if (useCampaign) {
-          window.clearTimeout(autoAdvanceTimer)
-          autoAdvanceTimer = window.setTimeout(() => {
-            if (get().campaignPhase === "success") get().continueCampaign()
-          }, 2600)
-        }
-      }, 900)
+      for (let i = 0; i < 6; i += 1) window.setTimeout(() => audio.play("xp"), 80 * i)
+      void persist(scored)
+      if (useCampaign) {
+        window.clearTimeout(autoAdvanceTimer)
+        autoAdvanceTimer = window.setTimeout(() => {
+          if (get().campaignPhase === "success") get().continueCampaign()
+        }, 720)
+      }
     } else {
       audio.play("fail")
       if (useFlag) audio.play("ambient")
@@ -566,28 +558,20 @@ export const useGame = create<GameState>((set, get) => ({
     audio.play("transition")
     audio.play("zoom")
     const bonus = progress.difficulty === "hard" ? 0.75 : progress.difficulty === "easy" ? 1.35 : 1
+    void persist(progress)
     set({
       progress,
-      campaignPhase: "transition",
-      hitTint: "cyan",
-      lastFeedback: { ok: true, text: t().play.levelDone },
-      flyTo: level.nextFly ?? next.fly,
+      campaign: next,
+      campaignPhase: "play",
+      hitTint: null,
+      selectedIso: null,
+      highlightIso: null,
+      lastFeedback: null,
+      missionEndsAt: Date.now() + next.timeMs * bonus,
+      flyTo: { ...next.fly },
+      stage: "mission",
+      advancing: false,
     })
-    void persist(progress)
-    window.setTimeout(() => {
-      set({
-        campaign: next,
-        campaignPhase: "play",
-        hitTint: null,
-        selectedIso: null,
-        highlightIso: null,
-        lastFeedback: null,
-        missionEndsAt: Date.now() + next.timeMs * bonus,
-        flyTo: { ...next.fly },
-        stage: "mission",
-        advancing: false,
-      })
-    }, 900)
   },
 
   tickTimeout: () => {

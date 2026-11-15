@@ -27,7 +27,6 @@ export function CampaignOverlay() {
   const phase = useGame((s) => s.campaignPhase)
   const lastCountryName = useGame((s) => s.lastCountryName)
   const progress = useGame((s) => s.progress)
-  const continueCampaign = useGame((s) => s.continueCampaign)
   const lastFeedback = useGame((s) => s.lastFeedback)
   const flagMoment = useGame((s) => s.flagMoment)
   const lastPenalty = useGame((s) => s.lastPenalty)
@@ -123,29 +122,7 @@ export function CampaignOverlay() {
     return (
       <div className="gq-result is-ok" data-result="success">
         <p className="gq-verdict is-ok">{ui.verdictOk}</p>
-        <p className="kicker">{ui.greatJob}</p>
-        <h2>{ui.correctLocation}</h2>
         <p className="place">{lastCountryName || campaign.title}</p>
-        <p>{campaign.fact}</p>
-        <p className="xp-line">
-          +{campaign.reward} XP · {ui.level} {campaign.number}
-        </p>
-        <AnimatedXp target={progress.xp} />
-        <button type="button" className="btn" onClick={() => continueCampaign()}>
-          {ui.continue}
-        </button>
-      </div>
-    )
-  }
-
-  if (phase === "levelComplete") {
-    return (
-      <div className="gq-result is-ok" data-result="level">
-        <p className="kicker">{ui.levelDone}</p>
-        <h2>{campaign.title}</h2>
-        <button type="button" className="btn" onClick={() => continueCampaign()}>
-          {ui.continue}
-        </button>
       </div>
     )
   }

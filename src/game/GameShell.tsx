@@ -205,6 +205,15 @@ export function GameShell() {
     return () => window.clearTimeout(id)
   }, [stage, lastFeedback?.ok, mission?.id])
 
+  useEffect(() => {
+    if (stage !== "mission" || campaign || !lastFeedback?.ok || !mission) return
+    const idx = STORY_MISSIONS.findIndex((m) => m.id === mission.id)
+    const next = idx >= 0 ? STORY_MISSIONS[idx + 1] : undefined
+    if (!next) return
+    const id = window.setTimeout(() => startMission(next), 720)
+    return () => window.clearTimeout(id)
+  }, [stage, lastFeedback?.ok, mission?.id, campaign, startMission])
+
   const discover = stage === "discover"
   const ui = t().play
   const dict = t()
