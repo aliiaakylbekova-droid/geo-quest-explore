@@ -95,8 +95,9 @@ export function GameShell() {
   }, [introPhase])
 
   useEffect(() => {
-    if (campaign && campaignPhase === "play" && left <= 0 && missionEndsAt) tickTimeout()
-  }, [left, campaign, campaignPhase, missionEndsAt, tickTimeout])
+    if (left > 0 || !missionEndsAt || campaignPhase === "timeout") return
+    if (campaign || stage === "flag" || stage === "mission") tickTimeout()
+  }, [left, campaign, stage, campaignPhase, missionEndsAt, tickTimeout])
 
   const country = selectedIso ? getCatalog()?.byIso.get(selectedIso) : undefined
   const landmark = LANDMARKS.find((l) => l.id === landmarkId) ?? LANDMARKS[0]

@@ -10,6 +10,7 @@ type Sfx =
   | "unlock"
   | "transition"
   | "missionComplete"
+  | "timeout"
 
 class AudioManager {
   private ctx: AudioContext | null = null
@@ -91,11 +92,19 @@ class AudioManager {
     else if (name === "start") this.arpeggio([196, 247, 294, 392], 0.12, 0.16)
     else if (name === "zoom") this.sweep(180, 520, 0.42, 0.08)
     else if (name === "discovery") this.arpeggio([523, 659, 784], 0.1, 0.11)
-    else if (name === "success") this.arpeggio([392, 494, 587, 784], 0.11, 0.14)
+    else if (name === "success") {
+      this.arpeggio([523, 659, 784, 1046], 0.08, 0.12)
+      this.blip(1318, 0.1, "sine")
+    }
     else if (name === "fail") {
       this.sweep(320, 68, 0.44, 0.16)
       this.blip(62, 0.24, "sine")
       window.setTimeout(() => this.sweep(190, 48, 0.28, 0.09), 70)
+    }
+    else if (name === "timeout") {
+      this.blip(196, 0.11, "square")
+      window.setTimeout(() => this.blip(147, 0.13, "square"), 130)
+      window.setTimeout(() => this.sweep(130, 42, 0.55, 0.15), 270)
     }
     else if (name === "xp") this.blip(880, 0.06, "sine")
     else if (name === "unlock") this.arpeggio([659, 784, 988, 1175], 0.08, 0.1)

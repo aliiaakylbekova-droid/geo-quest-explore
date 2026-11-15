@@ -28,15 +28,27 @@ export function CampaignOverlay() {
   const lastCountryName = useGame((s) => s.lastCountryName)
   const progress = useGame((s) => s.progress)
   const continueCampaign = useGame((s) => s.continueCampaign)
-  const retryLevel = useGame((s) => s.retryLevel)
   const lastFeedback = useGame((s) => s.lastFeedback)
   const flagMoment = useGame((s) => s.flagMoment)
+  const lastPenalty = useGame((s) => s.lastPenalty)
   const mission = useGame((s) => s.mission)
   const stage = useGame((s) => s.stage)
+  const restartAfterTimeout = useGame((s) => s.restartAfterTimeout)
   const ui = t().play
   void useGame((s) => s.progress.locale)
 
   if (stage === "discover") return null
+  if (phase === "timeout") {
+    return (
+      <div className="gq-timeout-end" data-result="timeout">
+        <p className="gq-verdict is-timeout">{ui.timesUp}</p>
+        <p className="gq-penalty">{ui.scorePenalty.replace("{n}", String(lastPenalty || 20))}</p>
+        <button type="button" className="btn intro-start" onClick={() => restartAfterTimeout()}>
+          {ui.restart}
+        </button>
+      </div>
+    )
+  }
   if (stage === "flag" && (flagMoment || lastFeedback)) {
     if (flagMoment === "win" || lastFeedback?.ok) {
       return (
@@ -44,6 +56,7 @@ export function CampaignOverlay() {
           <div className="gq-fireworks" aria-hidden>
             <i /><i /><i /><i /><i /><i />
           </div>
+          <p className="gq-verdict is-ok">{ui.verdictOk}</p>
           <p className="kicker">{ui.congrats}</p>
           <h2>{ui.greatJob}</h2>
           <p className="gq-ticket-copy">{ui.nextTicket}</p>
@@ -53,6 +66,7 @@ export function CampaignOverlay() {
     return (
       <>
         <div className="gq-wrong-center" data-result="wrong">
+          <p className="gq-verdict is-bad">{ui.verdictBad}</p>
           <p className="gq-bang" aria-hidden>
             !
           </p>
@@ -71,6 +85,7 @@ export function CampaignOverlay() {
     if (lastFeedback.ok) {
       return (
         <div className="gq-result is-ok" data-result="success">
+          <p className="gq-verdict is-ok">{ui.verdictOk}</p>
           <p className="kicker">{ui.greatJob}</p>
           <h2>{ui.correctLocation}</h2>
           <p className="place">{lastCountryName || mission?.targetName}</p>
@@ -80,6 +95,7 @@ export function CampaignOverlay() {
     }
     return (
       <div className="gq-result is-wrong" data-result="wrong">
+        <p className="gq-verdict is-bad">{ui.verdictBad}</p>
         <p className="kicker">{ui.tryAgain}</p>
         <h2>{ui.notThisPlace}</h2>
         <p>{lastFeedback.text}</p>
@@ -92,6 +108,7 @@ export function CampaignOverlay() {
   if (phase === "wrong") {
     return (
       <div className="gq-result is-wrong" data-result="wrong">
+        <p className="gq-verdict is-bad">{ui.verdictBad}</p>
         <p className="kicker">{ui.tryAgain}</p>
         <h2>{ui.notThisPlace}</h2>
         <p>
@@ -101,22 +118,10 @@ export function CampaignOverlay() {
     )
   }
 
-  if (phase === "timeout") {
-    return (
-      <div className="gq-result is-timeout" data-result="timeout">
-        <p className="kicker">{ui.timesUp}</p>
-        <h2>{campaign.title}</h2>
-        <p>{campaign.hint}</p>
-        <button type="button" className="btn" onClick={() => retryLevel()}>
-          {ui.retry}
-        </button>
-      </div>
-    )
-  }
-
   if (phase === "success") {
     return (
       <div className="gq-result is-ok" data-result="success">
+        <p className="gq-verdict is-ok">{ui.verdictOk}</p>
         <p className="kicker">{ui.greatJob}</p>
         <h2>{ui.correctLocation}</h2>
         <p className="place">{lastCountryName || campaign.title}</p>

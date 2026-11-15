@@ -17,6 +17,7 @@ export type CampaignPhase = "play" | "correct" | "success" | "wrong" | "timeout"
 export type HitTint = "gold" | "cyan" | "red" | "orange" | null
 
 let autoAdvanceTimer = 0
+const TIMEOUT_PENALTY = 20
 
 export type FlyTo = { lat: number; lng: number; dist: number } | null
 
@@ -80,6 +81,7 @@ type GameState = {
   flagPins: string[]
   screenFlash: "red" | null
   flagMoment: "win" | "lose" | null
+  lastPenalty: number
   displayXp: number
   lastCountryName: string | null
   advancing: boolean
@@ -109,6 +111,7 @@ type GameState = {
   retryLevel: () => void
   continueCampaign: () => void
   tickTimeout: () => void
+  restartAfterTimeout: () => void
   syncAudio: () => void
 }
 
@@ -146,6 +149,7 @@ export const useGame = create<GameState>((set, get) => ({
   flagPins: [],
   screenFlash: null,
   flagMoment: null,
+  lastPenalty: 0,
   displayXp: 0,
   lastCountryName: null,
   advancing: false,
@@ -287,6 +291,7 @@ export const useGame = create<GameState>((set, get) => ({
     }
 
     if (ok) {
+      audio.play("success")
       audio.play("discovery")
       if (st.mission && (useFlag || useStory)) {
         get().completeMission(st.mission.id)
@@ -309,7 +314,6 @@ export const useGame = create<GameState>((set, get) => ({
         lastFeedback: { ok: true, text: t().play.correctLocation },
       })
       window.setTimeout(() => {
-        audio.play("success")
         const now = get()
         let next = { ...now.progress, xp: now.progress.xp + reward, coins: now.progress.coins + 20 }
         if (next.xp >= 500) next = grant(next, "xp-500")
@@ -379,9 +383,11 @@ export const useGame = create<GameState>((set, get) => ({
     set({
       mission,
       campaign: flagLike ? null : get().campaign,
+      campaignPhase: "play",
       missionEndsAt: Date.now() + mission.timeMs * bonus,
       lastFeedback: null,
       flagMoment: null,
+      lastPenalty: 0,
       highlightIso: mission.targetIso ?? null,
       stage: flagLike ? "flag" : "mission",
       flyTo:
@@ -515,6 +521,8 @@ export const useGame = create<GameState>((set, get) => ({
       campaignPhase: "play",
       hitTint: null,
       lastFeedback: null,
+      lastPenalty: 0,
+      flagMoment: null,
       missionEndsAt: Date.now() + level.timeMs * bonus,
       flyTo: { ...level.fly },
     })
@@ -584,10 +592,40 @@ export const useGame = create<GameState>((set, get) => ({
   },
 
   tickTimeout: () => {
-    if (get().campaignPhase !== "play") return
-    if (!get().campaign) return
-    audio.play("fail")
-    set({ campaignPhase: "timeout", hitTint: "orange", lastFeedback: { ok: false, text: t().play.timesUp } })
+    const st = get()
+    if (st.campaignPhase === "timeout") return
+    if (!st.missionEndsAt) return
+    if (!st.campaign && !(st.mission && (st.stage === "flag" || st.stage === "mission"))) return
+    audio.unlock()
+    audio.play("timeout")
+    audio.play("ambient")
+    const progress = {
+      ...st.progress,
+      coins: Math.max(0, st.progress.coins - TIMEOUT_PENALTY),
+      xp: Math.max(0, st.progress.xp - TIMEOUT_PENALTY),
+    }
+    set({
+      campaignPhase: "timeout",
+      hitTint: "orange",
+      flagMoment: null,
+      lastFeedback: { ok: false, text: t().play.timesUp },
+      lastPenalty: TIMEOUT_PENALTY,
+      progress,
+      displayXp: progress.xp,
+    })
+    void persist(progress)
+  },
+
+  restartAfterTimeout: () => {
+    const st = get()
+    audio.play("startClick")
+    if (st.campaign) {
+      get().retryLevel()
+      return
+    }
+    if (st.mission && (st.stage === "flag" || st.stage === "mission")) {
+      get().startMission(st.mission)
+    }
   },
 
   setLocalePref: (locale) => {

@@ -31,6 +31,11 @@ export default function App() {
         const m = useGame.getState().mission
         if (m?.lat != null) useGame.getState().fly(m.lat, m.lng ?? 0, 3.9)
       },
+      timeout: () => {
+        useGame.setState({ missionEndsAt: Date.now() - 1 })
+        useGame.getState().tickTimeout()
+      },
+      coins: () => useGame.getState().progress.coins,
     }
   }, [])
 
