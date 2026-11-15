@@ -241,6 +241,7 @@ export function GameShell() {
       className={`gq-live hud intro-${introPhase}${screenFlash === "red" ? " is-flash-red" : ""}`}
       data-hud="explorer-v2"
       data-intro={introPhase}
+      data-stage={stage}
       onClickCapture={(e) => {
         if ((e.target as HTMLElement).closest("button, select")) audio.play("startClick")
       }}
