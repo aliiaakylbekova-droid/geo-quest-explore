@@ -79,9 +79,17 @@ export function GameShell() {
   const [hoverTip, setHoverTip] = useState<{ name: string; x: number; y: number } | null>(null)
   const [coach, setCoach] = useState(() => !tutorialDone())
   const [moreOpen, setMoreOpen] = useState(false)
+  const [exitAsk, setExitAsk] = useState(false)
+  const exitToPlaque = useGame((s) => s.exitToPlaque)
   const lastTickSec = useRef<number | null>(null)
   const left = useTick(missionEndsAt)
   const clockOn = Boolean(missionEndsAt) && (Boolean(campaign) || stage === "flag" || stage === "mission")
+
+  function requestExit() {
+    setMoreOpen(false)
+    if (clockOn && left > 0) setExitAsk(true)
+    else exitToPlaque()
+  }
 
   useEffect(() => {
     void loadCatalog()
@@ -284,6 +292,9 @@ export function GameShell() {
             {progress.campaignDone.length}/{GEO_CAMPAIGN.length}
           </span>
         </div>
+        <button type="button" className="hud-exit" onClick={requestExit}>
+          {ui.exit}
+        </button>
       </header>
 
       <aside className="hud-left">
@@ -632,8 +643,28 @@ export function GameShell() {
               <span>{ui.surrender}</span>
             </button>
           ) : null}
+          <button type="button" className="hud-exit hud-exit-sheet" onClick={requestExit}>
+            <span>{ui.exit}</span>
+          </button>
         </div>
       </nav>
+      {exitAsk ? (
+        <div className="gq-tutorial" data-exit="confirm">
+          <article className="gq-tutorial-card">
+            <p className="kicker">{ui.geoGame}</p>
+            <h2>{ui.exitConfirmTitle}</h2>
+            <p className="gq-tutorial-lead">{ui.exitConfirmBody}</p>
+            <div className="gq-exit-actions">
+              <button type="button" className="intro-start intro-journey" onClick={() => exitToPlaque()}>
+                {ui.exitYes}
+              </button>
+              <button type="button" className="btn ghost" onClick={() => setExitAsk(false)}>
+                {ui.exitNo}
+              </button>
+            </div>
+          </article>
+        </div>
+      ) : null}
       <CampaignOverlay />
       {introPhase === "ready" && coach ? <TutorialOverlay onDone={() => setCoach(false)} /> : null}
     </div>

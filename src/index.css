@@ -137,11 +137,12 @@ button, input, select { font-family: inherit; }
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
-.brand { display: flex; align-items: baseline; gap: 12px; }
+.brand { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
 .brand strong {
   font-family: Cinzel, serif;
   letter-spacing: 0.18em;
   font-size: 15px;
+  white-space: nowrap;
   text-shadow: 0 0 18px rgba(94, 231, 255, 0.28);
 }
 .pilot { color: var(--muted); font-size: 13px; }
@@ -162,6 +163,33 @@ button, input, select { font-family: inherit; }
 .hud-clock.is-warn {
   color: #ffb38a;
   animation: pulse 0.85s ease-in-out infinite;
+}
+.hud-exit {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  min-height: 36px;
+  padding: 4px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 179, 138, 0.45);
+  background: rgba(40, 16, 12, 0.45);
+  color: #ffd4c4;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+.hud-nav-sheet .hud-exit {
+  display: none;
+  margin-left: 0;
+  min-height: 44px;
+}
+.gq-exit-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.gq-exit-actions .ghost {
+  width: 100%;
+  min-height: 44px;
 }
 
 .hud-left, .hud-right {
@@ -388,6 +416,7 @@ button, input, select { font-family: inherit; }
 }
 
 .hud-bottom {
+  z-index: 8;
   left: 16px;
   right: 16px;
   bottom: 12px;
@@ -1020,14 +1049,29 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
     flex-wrap: nowrap;
   }
   .brand strong { font-size: 11px; letter-spacing: 0.1em; }
-  .pilot { font-size: 11px; }
+  .pilot { display: none; }
   .hud-xp { font-size: 10px; gap: 4px; white-space: nowrap; min-width: 0; }
   .hud-xp span:nth-child(n+4),
   .hud-xp .sep:nth-child(n+3) { display: none; }
   .hud-clock {
     display: block;
-    font-size: 18px;
+    font-size: 16px;
     margin-left: auto;
+  }
+  .hud-top .hud-exit {
+    min-height: 32px;
+    padding: 4px 8px;
+    font-size: 11px;
+    margin-left: 4px;
+  }
+  .hud-bottom.is-more .hud-nav-sheet .hud-exit {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    grid-column: 1 / -1;
+    min-height: 48px;
+    font-size: 14px;
+    background: rgba(40, 16, 12, 0.9);
   }
   .brand { min-width: 0; }
   .hud-left, .hud-right {
@@ -1102,6 +1146,10 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
   .hud-nav-sheet {
     display: none;
   }
+  .gq-live:has(.hud-bottom.is-more) .hud-left,
+  .gq-live:has(.hud-bottom.is-more) .hud-right {
+    visibility: hidden;
+  }
   .hud-bottom.is-more .hud-nav-sheet {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1110,13 +1158,16 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
     left: 6px;
     right: 6px;
     bottom: calc(100% + 8px);
+    z-index: 9;
     padding: 8px;
-    background: var(--glass-2);
+    background: rgba(8, 14, 22, 0.94);
     border: 1px solid var(--line);
     border-radius: 16px;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
   }
-  .hud-bottom.is-more .hud-nav-sheet .mission-select {
+  .hud-bottom.is-more .hud-nav-sheet .mission-select,
+  .hud-bottom.is-more .hud-nav-sheet .ghost,
+  .hud-bottom.is-more .hud-nav-sheet .hud-exit {
     grid-column: 1 / -1;
     width: 100%;
     max-width: none;

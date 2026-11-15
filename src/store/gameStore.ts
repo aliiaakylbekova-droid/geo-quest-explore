@@ -112,6 +112,7 @@ type GameState = {
   continueCampaign: () => void
   tickTimeout: () => void
   restartAfterTimeout: () => void
+  exitToPlaque: () => void
   syncAudio: () => void
 }
 
@@ -400,6 +401,27 @@ export const useGame = create<GameState>((set, get) => ({
       stage: "explore",
       flyTo: { lat: 18, lng: 20, dist: 6.5 },
     }),
+
+  exitToPlaque: () => {
+    window.clearTimeout(autoAdvanceTimer)
+    set({
+      stage: "register",
+      introPhase: "card",
+      campaign: null,
+      campaignPhase: "play",
+      mission: null,
+      missionEndsAt: null,
+      lastFeedback: null,
+      hitTint: null,
+      screenFlash: null,
+      flagPins: [],
+      flagMoment: null,
+      lastPenalty: 0,
+      advancing: false,
+      flyTo: null,
+      highlightIso: null,
+    })
+  },
 
   award: (xp, coins) => {
     let progress = { ...get().progress, xp: get().progress.xp + xp, coins: get().progress.coins + coins }
