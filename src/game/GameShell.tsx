@@ -314,7 +314,7 @@ export function GameShell() {
             <p className="brief">{leftBrief}</p>
             {campaign ? (
               <>
-                <p className="goal">
+                <p className="goal mission-prompt">
                   <span>{ui.task}</span>
                   {campaign.goal}
                 </p>
@@ -323,7 +323,7 @@ export function GameShell() {
             ) : null}
             {(stage === "mission" || stage === "flag") && mission && !campaign ? (
             <>
-              <p className="goal">
+              <p className="goal mission-prompt">
                 <span>{ui.goal}</span>
                 {mission.goal}
               </p>
