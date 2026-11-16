@@ -117,8 +117,9 @@ export function EarthScene({
   const stage = useGame((s) => s.stage)
   const campaign = useGame((s) => s.campaign)
   const flagPins = useGame((s) => s.flagPins)
-  const missionMode = stage === "mission" || Boolean(campaign)
-  const strongBorders = missionMode || layers.borders
+  const flagHunt = stage === "flag"
+  const missionMode = (stage === "mission" || Boolean(campaign)) && !flagHunt
+  const strongBorders = missionMode || layers.borders || flagHunt
   const earth = useRef<Group>(null)
   const globeMesh = useRef<Mesh>(null)
   const fly = useRef(0)

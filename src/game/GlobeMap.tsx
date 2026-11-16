@@ -41,7 +41,7 @@ export function EarthBundle({
   const [lod, setLod] = useState(0)
   const [pack, setPack] = useState<Awaited<ReturnType<typeof loadCatalog>> | null>(null)
   const countries = pack?.countries ?? BUNDLED_NAMES
-  const showNames = stage !== "mission" && stage !== "discover" && !campaign
+  const showNames = stage === "flag" || (stage !== "mission" && stage !== "discover" && !campaign)
   const labeled = useMemo(() => {
     if (lod === 0) return countries.filter((c) => (c.pop ?? 0) > 12_000_000)
     if (lod === 1) return countries.filter((c) => (c.pop ?? 0) > 8_000_000)

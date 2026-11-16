@@ -390,14 +390,13 @@ export const useGame = create<GameState>((set, get) => ({
       lastFeedback: null,
       flagMoment: null,
       lastPenalty: 0,
-      highlightIso: mission.targetIso ?? null,
+      highlightIso: flagLike ? null : (mission.targetIso ?? null),
       stage: flagLike ? "flag" : "mission",
-      flyTo:
-        flagLike && mission.lat != null
-          ? { lat: mission.lat, lng: mission.lng ?? 0, dist: 4.6 }
-          : mission.lat != null
-            ? { lat: mission.lat, lng: mission.lng ?? 0, dist: 5.4 }
-            : { lat: 20, lng: 30, dist: 6.5 },
+      flyTo: flagLike
+        ? { lat: 22, lng: 18, dist: 6.6 }
+        : mission.lat != null
+          ? { lat: mission.lat, lng: mission.lng ?? 0, dist: 5.4 }
+          : { lat: 20, lng: 30, dist: 6.5 },
     })
   },
 
