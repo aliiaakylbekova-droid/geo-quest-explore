@@ -291,18 +291,6 @@ export function GameShell() {
           <span className="sep" />
           <span>◆ {progress.coins}</span>
         </div>
-        <button
-          type="button"
-          className="hud-chrome-toggle"
-          aria-expanded={!hudMin}
-          aria-controls="gq-hud-stack"
-          onClick={() => {
-            setHudMin((v) => !v)
-            setMoreOpen(false)
-          }}
-        >
-          {hudMin ? ui.showHud : ui.hideHud}
-        </button>
         <button type="button" className="hud-exit" onClick={requestExit}>
           {ui.exit}
         </button>
@@ -358,12 +346,30 @@ export function GameShell() {
               </button>
             </>
           ) : null}
+          <div className="hud-peek">
+            {(stage === "mission" || stage === "flag") && mission ? (
+              <>
+                {hintOn ? <p className="hint-box">{mission.hint}</p> : null}
+                <button type="button" className="btn ghost" onClick={() => setHintOn(true)}>
+                  {ui.hint}
+                </button>
+              </>
+            ) : null}
+            <button
+              type="button"
+              className="hud-chrome-toggle"
+              aria-expanded={!hudMin}
+              aria-controls="gq-hud-stack"
+              onClick={() => {
+                setHudMin((v) => !v)
+                setMoreOpen(false)
+              }}
+            >
+              {hudMin ? ui.showHud : ui.hideHud}
+            </button>
+          </div>
           {(stage === "mission" || stage === "flag") && mission ? (
             <>
-              {hintOn ? <p className="hint-box">{mission.hint}</p> : null}
-              <button type="button" className="btn ghost" onClick={() => setHintOn(true)}>
-                {ui.hint}
-              </button>
               {lastFeedback ? <p className={lastFeedback.ok ? "ok" : "bad"}>{lastFeedback.text}</p> : null}
               {lastFeedback?.ok ? <p className="recap">{mission.recap}</p> : null}
             </>

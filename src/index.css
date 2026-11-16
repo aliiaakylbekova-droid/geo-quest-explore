@@ -1054,7 +1054,8 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
     gap: 8px;
     flex-wrap: nowrap;
   }
-  .brand { display: none; }
+  .brand { display: flex; min-width: 0; }
+  .brand strong { font-size: 11px; letter-spacing: 0.1em; }
   .pilot { display: none; }
   .hud-xp { font-size: 10px; gap: 4px; white-space: nowrap; min-width: 0; }
   .hud-clock {
@@ -1069,42 +1070,46 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
     font-size: 11px;
     margin-left: 4px;
   }
+  .hud-peek {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+    margin-top: 6px;
+  }
   .hud-chrome-toggle {
-    display: inline-flex;
+    display: flex;
     align-items: center;
     justify-content: center;
-    flex: 0 0 auto;
-    min-height: 32px;
-    padding: 4px 8px;
-    margin-left: 4px;
-    border-radius: 10px;
+    width: 100%;
+    min-height: 34px;
+    margin: 0;
+    padding: 4px 10px;
+    border-radius: 12px;
     border: 1px solid var(--line);
     background: rgba(8, 18, 28, 0.72);
     color: var(--cyan);
-    font-size: 11px;
+    font-size: 12px;
     letter-spacing: 0.04em;
     cursor: pointer;
   }
-  .gq-live.is-hud-min .hud-stack {
+  .gq-live.is-hud-min .hud-stack .flag-hunt,
+  .gq-live.is-hud-min .hud-stack .timer-xl,
+  .gq-live.is-hud-min .hud-stack .timer-idle,
+  .gq-live.is-hud-min .hud-stack .stat-stack,
+  .gq-live.is-hud-min .hud-stack .layers,
+  .gq-live.is-hud-min .hud-stack .country-card {
+    display: none;
+  }
+  .gq-live.is-hud-min .mission-card > *:not(.hud-peek) {
     display: none;
   }
   .gq-live.is-hud-min .hud-center {
-    top: calc(40px + env(safe-area-inset-top, 0px));
+    top: calc(50px + env(safe-area-inset-top, 0px));
     bottom: calc(72px + env(safe-area-inset-bottom, 0px));
     left: 0;
     right: 0;
   }
-  .gq-live.is-hud-min .hud-top {
-    left: 8px;
-    right: 8px;
-    top: calc(6px + env(safe-area-inset-top, 0px));
-    height: 36px;
-    min-height: 36px;
-    padding: 2px 8px;
-    gap: 6px;
-  }
-  .gq-live.is-hud-min .hud-xp { font-size: 10px; }
-  .gq-live.is-hud-min .gq-select-chip { top: 48px; }
   .gq-live.is-hud-min .gq-hint-drawer { display: none; }
   .hud-bottom.is-more .hud-nav-sheet .hud-exit {
     display: flex;
