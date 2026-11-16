@@ -1103,6 +1103,17 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
   .gq-live.is-hud-min .hud-hint-row {
     display: none !important;
   }
+  .gq-live.is-hud-min .hud-stack .flag-hunt,
+  .gq-live.is-hud-min .flag-hunt {
+    display: flex !important;
+  }
+  .gq-live.is-hud-min .hud-stack .flag-xl,
+  .gq-live.is-hud-min .flag-xl {
+    display: block !important;
+  }
+  .gq-live.is-hud-min .hud-stack .mission-card {
+    display: block !important;
+  }
   .gq-live[data-stage="explore"] .flag-hunt,
   .gq-live[data-stage="explore"] .flag-xl,
   .gq-live[data-stage="explore"] .country-card {
@@ -1147,7 +1158,7 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
     pointer-events: auto;
   }
   .hud-stack .flag-hunt { order: 1; flex: 0 0 auto; }
-  .hud-stack .mission-card { order: 2; flex: 1 1 auto; min-height: 0; overflow: auto; }
+  .hud-stack .mission-card { order: 2; flex: 0 0 auto; min-height: auto; overflow: visible; }
   .hud-stack .hud-peek { order: 3; flex: 0 0 auto; }
   .hud-stack .timer-xl,
   .hud-stack .timer-idle { order: 4; flex: 0 0 auto; }
