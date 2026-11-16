@@ -1100,7 +1100,15 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
     gap: 6px;
     width: 100%;
   }
-  .gq-live.is-hud-min .hud-hint-row {
+  .gq-live.is-hud-min .hud-hint-row,
+  .gq-live.is-hud-min .hud-stack .mission-card,
+  .gq-live.is-hud-min .hud-stack .stat-stack,
+  .gq-live.is-hud-min .hud-stack .layers,
+  .gq-live.is-hud-min .hud-stack .timer-idle,
+  .gq-live.is-hud-min .hud-stack .country-card {
+    display: none !important;
+  }
+  .gq-live.is-hud-min[data-stage="flag"] .hud-stack .timer-xl {
     display: none !important;
   }
   .gq-live.is-hud-min .hud-stack .flag-hunt,
@@ -1111,8 +1119,8 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
   .gq-live.is-hud-min .flag-xl {
     display: block !important;
   }
-  .gq-live.is-hud-min .hud-stack .mission-card {
-    display: block !important;
+  .gq-live.is-hud-min .hud-stack .hud-peek {
+    display: flex !important;
   }
   .gq-live[data-stage="explore"] .flag-hunt,
   .gq-live[data-stage="explore"] .flag-xl,
