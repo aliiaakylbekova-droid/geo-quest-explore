@@ -138,6 +138,8 @@ export const en: Dict = {
     journal: "Journal",
     more: "More",
     exit: "Exit",
+    hideHud: "Hide",
+    showHud: "Show",
     exitConfirmTitle: "Leave this round?",
     exitConfirmBody: "The timer stops. This round will not count. You return to Start game.",
     exitYes: "Leave",

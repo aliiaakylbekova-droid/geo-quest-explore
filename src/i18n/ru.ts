@@ -135,6 +135,8 @@ export const ru = {
     journal: "Журнал",
     more: "Ещё",
     exit: "Выход",
+    hideHud: "Скрыть",
+    showHud: "Раскрыть",
     exitConfirmTitle: "Выйти из раунда?",
     exitConfirmBody: "Таймер остановится. Раунд не засчитается. Вернёшься к экрану «Начать игру».",
     exitYes: "Выйти",

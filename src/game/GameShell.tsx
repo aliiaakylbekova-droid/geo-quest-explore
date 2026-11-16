@@ -79,6 +79,7 @@ export function GameShell() {
   const [hoverTip, setHoverTip] = useState<{ name: string; x: number; y: number } | null>(null)
   const [coach, setCoach] = useState(() => !tutorialDone())
   const [moreOpen, setMoreOpen] = useState(false)
+  const [hudMin, setHudMin] = useState(false)
   const [exitAsk, setExitAsk] = useState(false)
   const exitToPlaque = useGame((s) => s.exitToPlaque)
   const lastTickSec = useRef<number | null>(null)
@@ -262,7 +263,7 @@ export function GameShell() {
 
   return (
     <div
-      className={`gq-live hud intro-${introPhase}${screenFlash === "red" ? " is-flash-red" : ""}`}
+      className={`gq-live hud intro-${introPhase}${screenFlash === "red" ? " is-flash-red" : ""}${hudMin ? " is-hud-min" : ""}`}
       data-hud="explorer-v2"
       data-intro={introPhase}
       data-stage={stage}
@@ -290,12 +291,24 @@ export function GameShell() {
           <span className="sep" />
           <span>◆ {progress.coins}</span>
         </div>
+        <button
+          type="button"
+          className="hud-chrome-toggle"
+          aria-expanded={!hudMin}
+          aria-controls="gq-hud-stack"
+          onClick={() => {
+            setHudMin((v) => !v)
+            setMoreOpen(false)
+          }}
+        >
+          {hudMin ? ui.showHud : ui.hideHud}
+        </button>
         <button type="button" className="hud-exit" onClick={requestExit}>
           {ui.exit}
         </button>
       </header>
 
-      <div className="hud-stack">
+      <div className="hud-stack" id="gq-hud-stack">
       <aside className="hud-left">
         <article className="mission-card" key={stage + (mission?.id ?? "")}>
             <p className="mission-no">
