@@ -394,19 +394,21 @@ export function GameShell() {
           </div>
         </article>
         <div className="hud-peek">
-          {(stage === "mission" || stage === "flag") && mission ? (
-            <>
-              {hintOn ? <p className="hint-box">{mission.hint}</p> : null}
-              <button type="button" className="btn ghost" onClick={() => setHintOn(true)}>
-                {ui.hint}
-              </button>
-            </>
-          ) : null}
+          <div className="hud-hint-row" id="gq-hint-row" hidden={hudMin}>
+            {(stage === "mission" || stage === "flag") && mission ? (
+              <>
+                {hintOn ? <p className="hint-box">{mission.hint}</p> : null}
+                <button type="button" className="btn ghost" onClick={() => setHintOn(true)}>
+                  {ui.hint}
+                </button>
+              </>
+            ) : null}
+          </div>
           <button
             type="button"
             className="hud-chrome-toggle"
             aria-expanded={!hudMin}
-            aria-controls="gq-hud-stack"
+            aria-controls="gq-hint-row"
             onClick={() => {
               setHudMin((v) => !v)
               setMoreOpen(false)

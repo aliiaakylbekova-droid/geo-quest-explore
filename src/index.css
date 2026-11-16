@@ -1094,33 +1094,15 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
     letter-spacing: 0.04em;
     cursor: pointer;
   }
-  .gq-live.is-hud-min .hud-stack .mission-card,
-  .gq-live.is-hud-min .hud-stack .flag-hunt,
-  .gq-live.is-hud-min .hud-stack .flag-xl,
-  .gq-live.is-hud-min .hud-stack .timer-xl,
-  .gq-live.is-hud-min .hud-stack .timer-idle,
-  .gq-live.is-hud-min .hud-stack .stat-stack,
-  .gq-live.is-hud-min .hud-stack .layers,
-  .gq-live.is-hud-min .hud-stack .country-card {
+  .hud-hint-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+  }
+  .gq-live.is-hud-min .hud-hint-row {
     display: none !important;
   }
-  .gq-live.is-hud-min .hud-stack {
-    max-height: none;
-    overflow: visible;
-  }
-  .gq-live.is-hud-min .hud-stack .hud-peek {
-    display: flex;
-    order: 1;
-  }
-  .gq-live.is-hud-min .hud-peek .hint-box { display: none; }
-  .gq-live.is-hud-min .gq-select-chip { display: none; }
-  .gq-live.is-hud-min .hud-center {
-    top: calc(50px + env(safe-area-inset-top, 0px));
-    bottom: calc(72px + env(safe-area-inset-bottom, 0px));
-    left: 0;
-    right: 0;
-  }
-  .gq-live.is-hud-min .gq-hint-drawer { display: none; }
   .gq-live[data-stage="explore"] .flag-hunt,
   .gq-live[data-stage="explore"] .flag-xl,
   .gq-live[data-stage="explore"] .country-card {
