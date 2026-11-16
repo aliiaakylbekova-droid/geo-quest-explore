@@ -391,6 +391,7 @@ button, input, select { font-family: inherit; }
 .flag-hunt { margin-bottom: 12px; }
 .flag-hunt p { font-weight: 700; color: var(--gold); }
 .flag-sm { width: 56px; border-radius: 4px; background: #fff; margin-bottom: 8px; }
+.country-pop-root { display: none; }
 
 .glabel {
   font-size: 12px;
@@ -1310,6 +1311,64 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
   .gq-verdict.is-ok, .gq-verdict.is-bad { font-size: clamp(22px, 8vw, 40px); padding: 6px 12px; }
   .gq-timeout-end { padding: 16px; }
   .gq-timeout-end .intro-start { width: min(320px, 88vw); }
+  .country-pop-root {
+    display: flex;
+    position: absolute;
+    z-index: 8;
+    left: 0;
+    right: 0;
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    justify-content: center;
+    pointer-events: none;
+    padding: 0 16px;
+  }
+  .country-pop {
+    position: relative;
+    pointer-events: auto;
+    width: min(252px, 74vw);
+    padding: 28px 14px 16px;
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    background: var(--glass);
+    backdrop-filter: blur(20px) saturate(1.15);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+    text-align: center;
+  }
+  .country-pop-flag {
+    display: block;
+    width: 84px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: #fff;
+    margin: 8px auto 10px;
+  }
+  .country-pop h3 {
+    font-family: Cinzel, serif;
+    font-size: 16px;
+    margin: 0 0 4px;
+    line-height: 1.2;
+  }
+  .country-pop p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .country-pop-x {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    min-height: 28px;
+    padding: 2px 8px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--cyan);
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .gq-live:has(.country-pop) .gq-select-chip { display: none; }
 }
 
 @media (max-width: 720px) and (max-height: 680px) {

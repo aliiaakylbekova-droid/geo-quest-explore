@@ -92,6 +92,10 @@ export function GameShell() {
     else exitToPlaque()
   }
 
+  function dismissCountry() {
+    useGame.setState({ selectedIso: null, lastCountryName: null })
+  }
+
   useEffect(() => {
     void loadCatalog()
   }, [])
@@ -671,6 +675,26 @@ export function GameShell() {
           </button>
         </div>
       </nav>
+
+      {stage === "explore" && country ? (
+        <div className="country-pop-root">
+          <aside className="country-pop" role="dialog" aria-labelledby="country-pop-title">
+            <button type="button" className="country-pop-x" onClick={dismissCountry}>
+              {dict.common.close}
+            </button>
+            <img
+              className="country-pop-flag"
+              src={`${import.meta.env.BASE_URL}flags/${country.iso.toLowerCase()}.svg`}
+              alt=""
+            />
+            <h3 id="country-pop-title">{country.name}</h3>
+            <p>
+              {ui.capital}: {country.capital || "—"}
+            </p>
+          </aside>
+        </div>
+      ) : null}
+
       {exitAsk ? (
         <div className="gq-tutorial" data-exit="confirm">
           <article className="gq-tutorial-card">
