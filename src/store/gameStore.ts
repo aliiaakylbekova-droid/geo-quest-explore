@@ -229,6 +229,16 @@ export const useGame = create<GameState>((set, get) => ({
       campaign: stage === "mission" ? get().campaign : null,
       lastFeedback: null,
       flyTo: home ? { lat: 25, lng: 12, dist: 6.5 } : get().flyTo,
+      ...(stage === "explore"
+        ? {
+            selectedIso: null,
+            highlightIso: null,
+            lastHit: null,
+            lastCountryName: null,
+            mission: home ? null : get().mission,
+            missionEndsAt: home ? null : get().missionEndsAt,
+          }
+        : {}),
     })
     void persist(progress)
     if (progress !== get().progress) set({ progress })

@@ -1120,6 +1120,11 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
     right: 0;
   }
   .gq-live.is-hud-min .gq-hint-drawer { display: none; }
+  .gq-live[data-stage="explore"] .flag-hunt,
+  .gq-live[data-stage="explore"] .flag-xl,
+  .gq-live[data-stage="explore"] .country-card {
+    display: none !important;
+  }
   .hud-bottom.is-more .hud-nav-sheet .hud-exit {
     display: flex;
     align-items: center;
