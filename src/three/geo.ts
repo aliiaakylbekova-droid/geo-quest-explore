@@ -149,7 +149,6 @@ export function countryFillGeometry(feature: GeoJSON.Feature, radius = EARTH_R +
   geo.setAttribute("position", new Float32BufferAttribute(positions, 3))
   geo.setAttribute("uv", new Float32BufferAttribute(uvs, 2))
   geo.setIndex(indices)
-  geo.computeVertexNormals()
   return geo
 }
 

@@ -8,7 +8,7 @@ import {
 } from "three"
 import { isoOf, loadCatalog } from "../geo/catalog"
 import { useGame } from "../store/gameStore"
-import { countryFillGeometry, EARTH_R } from "./geo"
+import { countryBboxSpan, countryFillGeometry, EARTH_R } from "./geo"
 
 const texCache = new Map<string, CanvasTexture>()
 const geoCache = new Map<string, BufferGeometry>()
@@ -103,7 +103,7 @@ function FlagCountry({
   highlighted: boolean
   opened: boolean
 }) {
-  const geo = useMemo(() => geometryFor(iso, feature), [iso, feature])
+  const geo = useMemo(() => geoCache.get(iso) ?? geometryFor(iso, feature), [iso, feature])
   const [map, setMap] = useState<CanvasTexture | null>(() => texCache.get(iso) ?? null)
 
   useEffect(() => {
@@ -120,7 +120,7 @@ function FlagCountry({
   if (!geo || !map) return null
   const tint = selected || highlighted ? "#fff4c2" : opened ? "#ffffff" : "#dbe3ec"
   return (
-    <mesh geometry={geo} raycast={() => undefined} frustumCulled={false}>
+    <mesh geometry={geo} raycast={() => undefined}>
       <meshBasicMaterial
         map={map}
         color={tint}
@@ -135,6 +135,8 @@ function FlagCountry({
   )
 }
 
+type FlagItem = { iso: string; feature: GeoJSON.Feature }
+
 export function CountryFlags() {
   const selectedIso = useGame((s) => s.selectedIso)
   const highlightIso = useGame((s) => s.highlightIso)
@@ -142,27 +144,50 @@ export function CountryFlags() {
   const introPhase = useGame((s) => s.introPhase)
   const opened = useMemo(() => new Set(visited), [visited])
   const [features, setFeatures] = useState<GeoJSON.Feature[]>([])
+  const [built, setBuilt] = useState<FlagItem[]>([])
 
   useEffect(() => {
     void loadCatalog().then((pack) => setFeatures(pack.features))
   }, [])
 
-  const items = useMemo(() => {
-    if (introPhase !== "ready") return []
-    const out: { iso: string; feature: GeoJSON.Feature }[] = []
+  useEffect(() => {
+    if (introPhase !== "ready" || !features.length) {
+      setBuilt([])
+      return
+    }
+    const items: (FlagItem & { span: number })[] = []
     const seen = new Set<string>()
     for (const feature of features) {
       const iso = isoOf(feature)
       if (!iso || iso.length !== 2 || iso === "-99" || seen.has(iso)) continue
       seen.add(iso)
-      out.push({ iso, feature })
+      items.push({ iso, feature, span: countryBboxSpan(feature) })
     }
-    return out
+    items.sort((a, b) => b.span - a.span)
+
+    let i = 0
+    let raf = 0
+    let cancelled = false
+    const kick = window.setTimeout(() => {
+      const step = () => {
+        if (cancelled) return
+        const end = Math.min(i + 6, items.length)
+        for (; i < end; i += 1) geometryFor(items[i].iso, items[i].feature)
+        setBuilt(items.slice(0, i).map(({ iso, feature }) => ({ iso, feature })))
+        if (i < items.length) raf = window.requestAnimationFrame(step)
+      }
+      raf = window.requestAnimationFrame(step)
+    }, 320)
+    return () => {
+      cancelled = true
+      window.clearTimeout(kick)
+      window.cancelAnimationFrame(raf)
+    }
   }, [features, introPhase])
 
   return (
     <group>
-      {items.map(({ iso, feature }) => (
+      {built.map(({ iso, feature }) => (
         <FlagCountry
           key={iso}
           iso={iso}

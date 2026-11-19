@@ -1,5 +1,5 @@
 import { OrbitControls, Stars } from "@react-three/drei"
-import { useFrame, useLoader, useThree } from "@react-three/fiber"
+import { useFrame, useThree } from "@react-three/fiber"
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
   AdditiveBlending,
@@ -14,6 +14,7 @@ import {
   type Group,
   type LineBasicMaterial,
   type Mesh,
+  type Texture,
 } from "three"
 import { useGame } from "../store/gameStore"
 import type { NamedLine } from "../geo/catalog"
@@ -28,6 +29,60 @@ export type Layers = {
   borders: boolean
   capitals: boolean
   climate: boolean
+}
+
+export function EarthWarmup() {
+  return (
+    <mesh>
+      <sphereGeometry args={[EARTH_R, 48, 32]} />
+      <meshStandardMaterial color="#3d6ea8" roughness={0.82} metalness={0.04} />
+    </mesh>
+  )
+}
+
+const jpegCache = new Map<string, Texture>()
+
+function prefetchJpeg(path: string, srgb: boolean) {
+  if (typeof window === "undefined" || jpegCache.has(path)) return
+  new TextureLoader().load(path, (ready) => {
+    if (srgb) ready.colorSpace = SRGBColorSpace
+    ready.anisotropy = 2
+    ready.needsUpdate = true
+    jpegCache.set(path, ready)
+  })
+}
+
+prefetchJpeg(`${import.meta.env.BASE_URL}textures/earth-day.jpg`, true)
+prefetchJpeg(`${import.meta.env.BASE_URL}textures/earth-bump.jpg`, false)
+
+function useJpegTexture(path: string, srgb: boolean) {
+  const [tex, setTex] = useState<Texture | null>(() => jpegCache.get(path) ?? null)
+  useEffect(() => {
+    const hit = jpegCache.get(path)
+    if (hit) {
+      setTex(hit)
+      return
+    }
+    let dead = false
+    new TextureLoader().load(
+      path,
+      (ready) => {
+        if (srgb) ready.colorSpace = SRGBColorSpace
+        ready.anisotropy = 2
+        ready.needsUpdate = true
+        jpegCache.set(path, ready)
+        if (!dead) setTex(ready)
+      },
+      undefined,
+      () => {
+        if (!dead) setTex(null)
+      },
+    )
+    return () => {
+      dead = true
+    }
+  }, [path, srgb])
+  return tex
 }
 
 type Props = {
@@ -105,9 +160,8 @@ export function EarthScene({
   onPick,
   onHover,
 }: Props) {
-  const day = useLoader(TextureLoader, `${import.meta.env.BASE_URL}textures/earth-day.jpg`)
-  const bump = useLoader(TextureLoader, `${import.meta.env.BASE_URL}textures/earth-bump.jpg`)
-  day.colorSpace = SRGBColorSpace
+  const day = useJpegTexture(`${import.meta.env.BASE_URL}textures/earth-day.jpg`, true)
+  const bump = useJpegTexture(`${import.meta.env.BASE_URL}textures/earth-bump.jpg`, false)
   const sun = useRef<DirectionalLight>(null)
   const { camera } = useThree()
   const introPhase = useGame((s) => s.introPhase)
@@ -225,7 +279,7 @@ export function EarthScene({
       <ambientLight intensity={0.62} />
       <hemisphereLight args={[new Color("#9ec9ff"), new Color("#1a120c"), 0.35]} />
       <directionalLight ref={sun} intensity={2.15} color="#fff4d6" castShadow position={[8, 3, 4]} />
-      <Stars radius={48} depth={24} count={1600} factor={2.2} fade speed={0.25} />
+      <Stars radius={48} depth={24} count={700} factor={2.2} fade speed={0.25} />
       <GlobePick
         mesh={globeMesh}
         features={features}
@@ -238,14 +292,14 @@ export function EarthScene({
       />
       <group ref={earth}>
       <mesh ref={globeMesh}>
-        <sphereGeometry args={[EARTH_R, 96, 64]} />
+        <sphereGeometry args={[EARTH_R, 64, 48]} />
         <meshStandardMaterial
           map={day}
-          bumpMap={layers.relief ? bump : null}
-          bumpScale={layers.relief ? 0.045 : 0}
+          bumpMap={layers.relief && bump ? bump : null}
+          bumpScale={layers.relief && bump ? 0.045 : 0}
           roughness={0.72}
           metalness={0.04}
-          color="#ffffff"
+          color={day ? "#ffffff" : "#3d6ea8"}
         />
       </mesh>
       <Atmosphere />

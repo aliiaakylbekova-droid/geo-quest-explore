@@ -2,7 +2,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import countryNames from "../data/country-names.json"
 import { loadCatalog, loadHiResCountries } from "../geo/catalog"
 import { CountryLabels, HoverCapital, type LabelCountry } from "../three/CountryLabels"
-import { EarthScene } from "../three/EarthScene"
+import { EarthScene, EarthWarmup } from "../three/EarthScene"
 import type { GlobeHover } from "../three/GlobePick"
 import { CameraRig } from "../three/CameraRig"
 import { ErrorBoundary } from "../three/ErrorBoundary"
@@ -56,7 +56,11 @@ export function EarthBundle({
   }, [])
 
   useEffect(() => {
-    if (lod >= 2) void loadHiResCountries().then((c) => setPack({ ...c }))
+    if (lod < 2) return
+    const id = window.setTimeout(() => {
+      void loadHiResCountries().then((c) => setPack({ ...c }))
+    }, 1600)
+    return () => window.clearTimeout(id)
   }, [lod])
 
   const features = useMemo(() => {
@@ -69,7 +73,7 @@ export function EarthBundle({
       <LodTracker onLod={setLod} />
       <CountryLabels countries={labeled} visible={showNames} />
       {hoverCapitals ? <HoverCapital iso={hoverIso} enabled /> : null}
-      <Suspense fallback={null}>
+      <Suspense fallback={<EarthWarmup />}>
         <EarthScene
           features={features}
           cities={pack?.cities ?? []}

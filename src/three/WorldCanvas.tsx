@@ -74,13 +74,13 @@ export function WorldCanvas({
         near: 0.1,
         far: 160,
       }}
-      dpr={[1, 1.5]}
+      dpr={[1, 1.25]}
       gl={{
         antialias: true,
         alpha: false,
         powerPreference: "high-performance",
         failIfMajorPerformanceCaveat: false,
-        preserveDrawingBuffer: true,
+        preserveDrawingBuffer: false,
       }}
       shadows={false}
       frameloop="always"
