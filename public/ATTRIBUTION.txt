@@ -9,3 +9,5 @@ GEO QUEST map & earth assets (offline copies)
 - Flag SVG (4x3) from flag-icons
   MIT License. https://github.com/lipis/flag-icons
   Local files: flags/*.svg
+- Original soft piano loop (CC0 1.0)
+  Local files: audio/piano-nocturne-loop.wav, audio/LICENSE.txt

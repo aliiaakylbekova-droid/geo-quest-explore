@@ -1,0 +1,11 @@
+GEO QUEST piano loop
+File: piano-nocturne-loop.wav
+
+Title: Nocturne fragment in C (loop)
+Composer: original work for GEO QUEST (Aliia)
+License: CC0 1.0 Universal (public domain dedication)
+https://creativecommons.org/publicdomain/zero/1.0/
+
+This recording is an original synthesized piano phrase. It is not a
+performance or arrangement of a copyrighted work. You may copy, modify,
+and use it without attribution, though credit is welcome.

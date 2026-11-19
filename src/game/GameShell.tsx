@@ -76,7 +76,7 @@ export function GameShell() {
   const [hintOn, setHintOn] = useState(false)
   const [point, setPoint] = useState<{ title: string; text: string } | null>(null)
   const [flagRound, setFlagRound] = useState<StoryMission | null>(null)
-  const [hoverTip, setHoverTip] = useState<{ name: string; x: number; y: number } | null>(null)
+  const [hoverTip, setHoverTip] = useState<{ name: string; capital: string | null; x: number; y: number } | null>(null)
   const [coach, setCoach] = useState(() => !tutorialDone())
   const [moreOpen, setMoreOpen] = useState(false)
   const [hudMin, setHudMin] = useState(false)
@@ -230,6 +230,7 @@ export function GameShell() {
 
   useEffect(() => {
     if (stage !== "flag") setFlagRound(null)
+    setHoverTip(null)
   }, [stage])
 
   useEffect(() => {
@@ -517,12 +518,19 @@ export function GameShell() {
           onPoint={(title, text) => setPoint({ title, text })}
           onHover={(hit) => {
             if (hideNames || !hit?.name) setHoverTip(null)
-            else setHoverTip({ name: hit.name, x: hit.x, y: hit.y })
+            else
+              setHoverTip({
+                name: hit.name,
+                capital: stage === "flag" ? hit.capital : null,
+                x: hit.x,
+                y: hit.y,
+              })
           }}
         />
         {!hideNames && hoverTip ? (
           <div className="gq-tip" style={{ left: hoverTip.x, top: hoverTip.y }}>
-            {hoverTip.name}
+            <span>{hoverTip.name}</span>
+            {hoverTip.capital ? <em className="gq-tip-cap">{hoverTip.capital}</em> : null}
           </div>
         ) : null}
         {!hideNames && lastCountryName && (hitTint === "gold" || hitTint === "cyan" || selectedIso) ? (

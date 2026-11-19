@@ -23,6 +23,11 @@ class AudioManager {
   private ambientNodes: OscillatorNode[] = []
   private ambientSources: AudioBufferSourceNode[] = []
   private ambientGain: GainNode | null = null
+  private pianoSrc: AudioBufferSourceNode | null = null
+  private pianoGain: GainNode | null = null
+  private pianoBuffer: AudioBuffer | null = null
+  private pianoLoading: Promise<AudioBuffer | null> | null = null
+  private pianoWanted = false
   unlocked = false
   musicOn = true
   sfxOn = true
@@ -177,8 +182,56 @@ class AudioManager {
 
   startAmbient() {
     if (!this.unlocked || !this.musicOn) return
+    this.pianoWanted = true
+    if (this.pianoGain || this.ambientGain) return
+    void this.startPianoLoop()
+  }
+
+  private loadPiano() {
+    if (this.pianoBuffer) return Promise.resolve(this.pianoBuffer)
+    if (this.pianoLoading) return this.pianoLoading
     const ctx = this.ensure()
-    if (this.ambientGain) return
+    this.pianoLoading = (async () => {
+      try {
+        const url = `${import.meta.env.BASE_URL}audio/piano-nocturne-loop.wav`
+        const res = await fetch(url)
+        if (!res.ok) return null
+        const raw = await res.arrayBuffer()
+        this.pianoBuffer = await ctx.decodeAudioData(raw.slice(0))
+        return this.pianoBuffer
+      } catch {
+        return null
+      }
+    })()
+    return this.pianoLoading
+  }
+
+  private async startPianoLoop() {
+    const ctx = this.ensure()
+    const buf = await this.loadPiano()
+    if (!this.pianoWanted || !this.unlocked || !this.musicOn) return
+    if (this.pianoGain || this.ambientGain) return
+    if (!buf) {
+      this.startPadFallback()
+      return
+    }
+    const g = ctx.createGain()
+    g.gain.value = 0.0001
+    g.connect(this.musicBus!)
+    const src = ctx.createBufferSource()
+    src.buffer = buf
+    src.loop = true
+    src.connect(g)
+    src.start()
+    g.gain.exponentialRampToValueAtTime(0.26, ctx.currentTime + 1.6)
+    this.pianoGain = g
+    this.pianoSrc = src
+  }
+
+  private startPadFallback() {
+    if (!this.unlocked || !this.musicOn) return
+    const ctx = this.ensure()
+    if (this.ambientGain || this.pianoGain) return
     const g = ctx.createGain()
     g.gain.value = 0.0001
     g.connect(this.musicBus!)
@@ -232,7 +285,25 @@ class AudioManager {
   }
 
   stopAmbient() {
+    this.pianoWanted = false
     const ctx = this.ctx
+    if (this.pianoSrc) {
+      try {
+        this.pianoSrc.stop()
+      } catch {
+        /* already stopped */
+      }
+      this.pianoSrc = null
+    }
+    if (this.pianoGain && ctx) {
+      try {
+        this.pianoGain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.4)
+      } catch {
+        /* closed */
+      }
+      this.pianoGain.disconnect()
+      this.pianoGain = null
+    }
     this.ambientSources.forEach((s) => {
       try {
         s.stop()

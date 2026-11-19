@@ -7,6 +7,14 @@ import { vecToLatLng } from "./geo"
 
 const DRAG_PX = 10
 
+export type GlobeHover = {
+  iso: string | null
+  name: string | null
+  capital: string | null
+  x: number
+  y: number
+}
+
 function hitGlobe(mesh: Mesh, camera: Camera, raycaster: Raycaster, clientX: number, clientY: number, el: HTMLElement) {
   mesh.updateMatrixWorld(true)
   const rect = el.getBoundingClientRect()
@@ -28,7 +36,7 @@ export function GlobePick({
   mesh: RefObject<Mesh | null>
   features: GeoJSON.Feature[]
   onPick: (hit: { iso: string | null; lat: number; lng: number }) => void
-  onHover?: (hit: { iso: string | null; name: string | null; x: number; y: number } | null) => void
+  onHover?: (hit: GlobeHover | null) => void
   enabled: boolean
 }) {
   const { camera, gl } = useThree()
@@ -59,28 +67,41 @@ export function GlobePick({
       return { ...ll, iso }
     }
 
-    const onDown = (e: PointerEvent) => {
-      if (!enabledRef.current || e.button !== 0) return
-      audio.unlock()
-      down.current = { x: e.clientX, y: e.clientY }
-      el.style.cursor = "grabbing"
-    }
-
-    const onMove = (e: PointerEvent) => {
-      if (!enabledRef.current) return
-      const hit = countryAt(e.clientX, e.clientY)
+    const emitHover = (clientX: number, clientY: number) => {
+      const hit = countryAt(clientX, clientY)
       if (!hit?.iso) {
         hoverRef.current?.(null)
         return
       }
       const rec = getCatalog()?.byIso.get(hit.iso)
-      hoverRef.current?.({ iso: hit.iso, name: rec?.name ?? hit.iso, x: e.clientX, y: e.clientY })
+      const raw = rec?.capital?.trim()
+      hoverRef.current?.({
+        iso: hit.iso,
+        name: rec?.name ?? hit.iso,
+        capital: raw && raw !== "—" ? raw : null,
+        x: clientX,
+        y: clientY,
+      })
+    }
+
+    const onDown = (e: PointerEvent) => {
+      if (!enabledRef.current || e.button !== 0) return
+      audio.unlock()
+      down.current = { x: e.clientX, y: e.clientY }
+      el.style.cursor = "grabbing"
+      if (e.pointerType !== "mouse") emitHover(e.clientX, e.clientY)
+    }
+
+    const onMove = (e: PointerEvent) => {
+      if (!enabledRef.current) return
+      emitHover(e.clientX, e.clientY)
     }
 
     const onUp = (e: PointerEvent) => {
       el.style.cursor = "grab"
       const start = down.current
       down.current = null
+      if (e.pointerType !== "mouse") hoverRef.current?.(null)
       if (!enabledRef.current || !start) return
       const dx = e.clientX - start.x
       const dy = e.clientY - start.y

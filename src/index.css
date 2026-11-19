@@ -66,15 +66,25 @@ button, input, select { font-family: inherit; }
   z-index: 8;
   transform: translate(-50%, calc(-100% - 12px));
   pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
   font-size: 12px;
   font-weight: 650;
   letter-spacing: 0.04em;
   color: #071018;
   background: linear-gradient(180deg, #8ff6ff, #5ee7ff);
-  border-radius: 999px;
+  border-radius: 12px;
   padding: 5px 10px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 0 18px rgba(94, 231, 255, 0.35);
   animation: rise 0.16s ease;
+}
+.gq-tip-cap {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 700;
+  color: #5a3a00;
 }
 
 .gq-select-chip {

@@ -217,6 +217,19 @@ export function pickNearestNamed(items: NamedLine[], lat: number, lng: number, m
   return best
 }
 
+export function capitalForIso(iso: string | null): { name: string; lat: number; lng: number } | null {
+  if (!iso) return null
+  const rec = catalog?.byIso.get(iso) ?? (seedCountries.find((c) => c.iso === iso) as CountryRecord | undefined)
+  const name = rec?.capital?.trim()
+  if (!name || name === "—") return null
+  const cities = catalog?.cities ?? []
+  const primary = cities.find((c) => c.iso === iso && c.kind === "Admin-0 capital")
+  const named = cities.find((c) => c.iso === iso && (c.name === name || c.nameEn === name))
+  const anyCap = cities.find((c) => c.iso === iso && c.kind.toLowerCase().includes("capital") && !c.kind.toLowerCase().includes("alt"))
+  const city = primary ?? named ?? anyCap
+  return { name, lat: city?.lat ?? rec!.lat, lng: city?.lng ?? rec!.lng }
+}
+
 export const NEIGHBORS: Record<string, string[]> = {
   KG: ["KZ", "UZ", "TJ", "CN"],
   KZ: ["RU", "CN", "KG", "UZ", "TM"],

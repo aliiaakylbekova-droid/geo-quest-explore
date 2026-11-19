@@ -20,7 +20,7 @@ import type { NamedLine } from "../geo/catalog"
 import { isoOf, type Place } from "../geo/catalog"
 import { EARTH_R, cameraFor, geometryFromGeoJSON } from "./geo"
 import { FlagPins } from "./FlagPins"
-import { GlobePick } from "./GlobePick"
+import { GlobePick, type GlobeHover } from "./GlobePick"
 
 export type Layers = {
   relief: boolean
@@ -43,7 +43,7 @@ type Props = {
   flyTo: { lat: number; lng: number; dist: number } | null
   lod: number
   onPick: (hit: { iso: string | null; lat: number; lng: number }) => void
-  onHover?: (hit: { iso: string | null; name: string | null; x: number; y: number } | null) => void
+  onHover?: (hit: GlobeHover | null) => void
 }
 
 function ClimateShell({ on }: { on: boolean }) {
