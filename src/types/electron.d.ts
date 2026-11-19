@@ -29,6 +29,12 @@ declare global {
       continue: () => void
       retry: () => void
       campaign: (index?: number) => void
+      hint: () => void
+      difficulty: (d?: "easy" | "medium" | "hard") => "easy" | "medium" | "hard"
+      hintRung: () => number
+      roundRules: () => unknown
+      xp: () => number
+      award: (xp?: number, coins?: number) => void
     }
   }
 }

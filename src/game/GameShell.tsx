@@ -6,6 +6,10 @@ import { GEO_CAMPAIGN } from "../data/campaign"
 import { LANDMARKS, NEIGHBORS, getCatalog, loadCatalog } from "../geo/catalog"
 import { formatClock } from "./logic"
 import { CampaignOverlay } from "./CampaignOverlay"
+import { filterCountryPool } from "./difficulty"
+import { DifficultyDock } from "./DifficultyDock"
+import { HintLadder } from "./HintLadder"
+import { CONTINENT_RU } from "./hintLadder"
 import { t } from "../i18n"
 import { FLAG_MODES, STORY_MISSIONS, type StoryMission } from "./storyMissions"
 import { StageView } from "../three/StageView"
@@ -36,16 +40,6 @@ function countryName(iso: string | null) {
   return getCatalog()?.byIso.get(iso)?.name ?? iso
 }
 
-const CONTINENT_RU: Record<string, string> = {
-  Asia: "Азия",
-  Europe: "Европа",
-  Africa: "Африка",
-  "North America": "Северная Америка",
-  "South America": "Южная Америка",
-  Oceania: "Океания",
-  Antarctica: "Антарктида",
-}
-
 export function GameShell() {
   const stage = useGame((s) => s.stage)
   const setStage = useGame((s) => s.setStage)
@@ -72,8 +66,8 @@ export function GameShell() {
   const lastCountryName = useGame((s) => s.lastCountryName)
   const hitTint = useGame((s) => s.hitTint)
   const screenFlash = useGame((s) => s.screenFlash)
-  const hideNames = stage === "mission"
-  const [hintOn, setHintOn] = useState(false)
+  const roundRules = useGame((s) => s.roundRules)
+  const hideNames = (stage === "mission" || stage === "flag") && !roundRules?.showNames
   const [point, setPoint] = useState<{ title: string; text: string } | null>(null)
   const [flagRound, setFlagRound] = useState<StoryMission | null>(null)
   const [hoverTip, setHoverTip] = useState<{ name: string; x: number; y: number } | null>(null)
@@ -138,7 +132,10 @@ export function GameShell() {
     pick(hit)
   }
 
-  const flagPool = useMemo(() => getCatalog()?.countries.filter((c) => c.iso.length === 2) ?? [], [stage, selectedIso])
+  const flagPool = useMemo(
+    () => filterCountryPool(getCatalog()?.countries ?? [], progress.difficulty),
+    [stage, selectedIso, progress.difficulty],
+  )
 
   function newFlagRound(kind: (typeof FLAG_MODES)[number] = "flag") {
     const pool = flagPool.length ? flagPool : [{ iso: "KG", name: "Кыргызстан", capital: "Бишкек", lat: 41.2, lng: 74.6, continent: "Asia", a3: "KGZ", nameEn: "Kyrgyzstan", subregion: "", pop: 0 }]
@@ -153,7 +150,7 @@ export function GameShell() {
         goal: "Кликни страну, которой принадлежит этот флаг.",
         hint: `Столица: ${c.capital || "—"}. Материк: ${CONTINENT_RU[c.continent] ?? c.continent}.`,
         recap: `Это ${c.name}. Столица — ${c.capital}.`,
-        timeMs: 50_000,
+        timeMs: 300_000,
         xp: 90,
         targetIso: c.iso,
         targetName: c.name,
@@ -168,7 +165,7 @@ export function GameShell() {
         goal: "Кликни страну на глобусе.",
         hint: `Регион: ${c.subregion || c.continent}.`,
         recap: `${c.capital} — столица страны ${c.name}.`,
-        timeMs: 50_000,
+        timeMs: 300_000,
         xp: 90,
         targetIso: c.iso,
         targetName: c.name,
@@ -225,7 +222,6 @@ export function GameShell() {
     setFlagRound(round)
     startMission(round)
     if (kind === "shape") useGame.setState({ highlightIso: c.iso })
-    setHintOn(false)
   }
 
   useEffect(() => {
@@ -275,6 +271,8 @@ export function GameShell() {
       data-hud="explorer-v2"
       data-intro={introPhase}
       data-stage={stage}
+      data-difficulty={progress.difficulty}
+      data-round-diff={roundRules?.difficulty ?? ""}
       onClickCapture={(e) => {
         if ((e.target as HTMLElement).closest("button, select")) audio.play("startClick")
       }}
@@ -377,13 +375,7 @@ export function GameShell() {
                 <input type="checkbox" checked={progress.sfxOn} onChange={(e) => useGame.getState().setSfx(e.target.checked)} />
               </label>
               <input type="range" min={0} max={1} step={0.05} value={progress.sfxVol} onChange={(e) => useGame.getState().setSfxVol(Number(e.target.value))} />
-              <div className="diff-row">
-                {(["easy", "medium", "hard"] as const).map((d) => (
-                  <button key={d} type="button" className={progress.difficulty === d ? "chip on" : "chip"} onClick={() => useGame.getState().setDifficulty(d)}>
-                    {dict.settings[d]}
-                  </button>
-                ))}
-              </div>
+              <DifficultyDock />
             </div>
           ) : null}
           <div className="mission-progress">
@@ -395,14 +387,7 @@ export function GameShell() {
         </article>
         <div className="hud-peek">
           <div className="hud-hint-row" id="gq-hint-row" hidden={hudMin}>
-            {(stage === "mission" || stage === "flag") && mission ? (
-              <>
-                {hintOn ? <p className="hint-box">{mission.hint}</p> : null}
-                <button type="button" className="btn ghost" onClick={() => setHintOn(true)}>
-                  {ui.hint}
-                </button>
-              </>
-            ) : null}
+            <HintLadder />
           </div>
           <button
             type="button"
@@ -438,6 +423,7 @@ export function GameShell() {
         ) : (
           <div className="timer-idle">{campaign ? ui.missions : ui.explore}</div>
         )}
+        <DifficultyDock />
         <div className="stat-stack">
           <div className="stat">
             <span>{ui.level}</span>

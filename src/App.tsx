@@ -39,6 +39,15 @@ export default function App() {
       skipTutorial: () => {
         localStorage.setItem("gq-tutorial-done", "1")
       },
+      hint: () => useGame.getState().requestExtraHint(),
+      difficulty: (d?: "easy" | "medium" | "hard") => {
+        if (d) useGame.getState().setDifficulty(d)
+        return useGame.getState().progress.difficulty
+      },
+      hintRung: () => useGame.getState().hintRung,
+      roundRules: () => useGame.getState().roundRules,
+      xp: () => useGame.getState().progress.xp,
+      award: (xp = 0, coins = 0) => useGame.getState().award(xp, coins),
     }
   }, [])
 

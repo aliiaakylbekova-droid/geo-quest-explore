@@ -38,10 +38,12 @@ export function EarthBundle({
   const flyTo = useGame((s) => s.flyTo)
   const stage = useGame((s) => s.stage)
   const campaign = useGame((s) => s.campaign)
+  const roundRules = useGame((s) => s.roundRules)
   const [lod, setLod] = useState(0)
   const [pack, setPack] = useState<Awaited<ReturnType<typeof loadCatalog>> | null>(null)
   const countries = pack?.countries ?? BUNDLED_NAMES
-  const showNames = stage === "flag" || (stage !== "mission" && stage !== "discover" && !campaign)
+  const hunting = stage === "mission" || stage === "flag" || Boolean(campaign)
+  const showNames = stage !== "discover" && (!hunting || Boolean(roundRules?.showNames))
   const labeled = useMemo(() => {
     if (lod === 0) return countries.filter((c) => (c.pop ?? 0) > 12_000_000)
     if (lod === 1) return countries.filter((c) => (c.pop ?? 0) > 8_000_000)

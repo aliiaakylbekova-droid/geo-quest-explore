@@ -324,6 +324,71 @@ button, input, select { font-family: inherit; }
 }
 .chip.on { background: var(--gold); color: #1a1404; border-color: var(--gold); }
 .diff-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.hud-diff {
+  background: var(--glass);
+  backdrop-filter: blur(20px) saturate(1.15);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 8px 10px;
+  flex: 0 0 auto;
+}
+.hud-diff-label {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.hud-diff .chip {
+  padding: 4px 8px;
+  font-size: 11px;
+  min-height: 28px;
+}
+.hud-diff-note {
+  margin: 6px 0 0;
+  font-size: 10px;
+  color: var(--gold);
+}
+.hint-ladder {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+.hint-box-sm {
+  margin: 0;
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 1.3;
+  max-height: 3.2em;
+  overflow: hidden;
+}
+.hint-actions {
+  display: flex;
+  gap: 6px;
+}
+.hint-actions .btn.ghost {
+  width: auto;
+  flex: 1;
+  margin-top: 0;
+  min-height: 32px;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+.hint-meta {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.hint-cost { color: var(--gold); }
+.audio-set .hud-diff {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  backdrop-filter: none;
+}
 
 .timer-xl, .timer-idle {
   font-variant-numeric: tabular-nums;
@@ -1103,6 +1168,7 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
   .gq-live.is-hud-min .hud-hint-row,
   .gq-live.is-hud-min .hud-stack .mission-card,
   .gq-live.is-hud-min .hud-stack .stat-stack,
+  .gq-live.is-hud-min .hud-stack .hud-diff,
   .gq-live.is-hud-min .hud-stack .layers,
   .gq-live.is-hud-min .hud-stack .timer-idle,
   .gq-live.is-hud-min .hud-stack .country-card {
@@ -1184,6 +1250,7 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
   .hud-stack .timer-xl,
   .hud-stack .timer-idle,
   .hud-stack .stat-stack,
+  .hud-stack .hud-diff,
   .hud-stack .layers,
   .hud-stack .country-card {
     pointer-events: auto;
@@ -1194,6 +1261,7 @@ h1 { font-family: Cinzel, serif; margin: 0 0 8px; }
   .hud-stack .timer-xl,
   .hud-stack .timer-idle { order: 4; flex: 0 0 auto; }
   .hud-stack .stat-stack { order: 5; flex: 0 0 auto; }
+  .hud-stack .hud-diff { order: 5; flex: 0 0 auto; }
   .hud-stack .layers { order: 6; flex: 0 0 auto; }
   .hud-stack .country-card { order: 7; flex: 0 0 auto; }
   .hud-left .mission-card { padding: 8px 10px; height: auto; }
