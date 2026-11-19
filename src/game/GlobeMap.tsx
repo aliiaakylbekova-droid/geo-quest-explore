@@ -44,14 +44,16 @@ export function EarthBundle({
   const [hoverIso, setHoverIso] = useState<string | null>(null)
   const countries = pack?.countries ?? BUNDLED_NAMES
   const roundRules = useGame((s) => s.roundRules)
+  const journeyLeg = useGame((s) => s.journey?.leg)
   const hunting = stage === "mission" || stage === "flag" || Boolean(campaign)
-  const showNames = stage !== "discover" && (!hunting || Boolean(roundRules?.showNames) || stage === "explore")
+  const showNames =
+    journeyLeg !== "results" &&
+    stage !== "discover" &&
+    (!hunting || Boolean(roundRules?.showNames) || stage === "explore")
   const hoverCapitals = stage === "flag"
   const labeled = useMemo(() => {
-    if (lod === 0) return countries.filter((c) => (c.pop ?? 0) > 12_000_000)
-    if (lod === 1) return countries.filter((c) => (c.pop ?? 0) > 8_000_000)
-    return countries
-  }, [countries, lod])
+    return countries.filter((c) => c.iso.length === 2 && c.iso !== "AQ" && c.iso !== "-99")
+  }, [countries])
 
   useEffect(() => {
     void loadCatalog().then((c) => setPack(c))

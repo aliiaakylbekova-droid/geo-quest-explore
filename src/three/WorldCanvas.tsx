@@ -1,6 +1,7 @@
 import { Canvas } from "@react-three/fiber"
 import { type ReactNode, useEffect } from "react"
 import { WebGLRenderer } from "three"
+import { setRendererQuality } from "./texQuality"
 
 function bindGlLog(gl: WebGLRenderer) {
   const el = gl.domElement
@@ -74,7 +75,7 @@ export function WorldCanvas({
         near: 0.1,
         far: 160,
       }}
-      dpr={[1, 1.25]}
+      dpr={[1, 2]}
       gl={{
         antialias: true,
         alpha: false,
@@ -86,6 +87,7 @@ export function WorldCanvas({
       frameloop="always"
       onCreated={({ gl }) => {
         gl.setClearColor("#050814")
+        setRendererQuality(gl)
         bindGlLog(gl)
         bindTouchLock(gl.domElement)
         console.info("[geo-quest] WebGL", gl.getContext().getParameter(gl.getContext().VERSION))

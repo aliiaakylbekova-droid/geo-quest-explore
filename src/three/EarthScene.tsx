@@ -23,6 +23,7 @@ import { isoOf, type Place } from "../geo/catalog"
 import { EARTH_R, cameraFor, geometryFromGeoJSON, latLngToVec } from "./geo"
 import { CountryFlags } from "./CountryFlags"
 import { GlobePick, type GlobeHover } from "./GlobePick"
+import { applyTexQuality } from "./texQuality"
 
 export type Layers = {
   relief: boolean
@@ -47,8 +48,7 @@ function prefetchJpeg(path: string, srgb: boolean) {
   if (typeof window === "undefined" || jpegCache.has(path)) return
   new TextureLoader().load(path, (ready) => {
     if (srgb) ready.colorSpace = SRGBColorSpace
-    ready.anisotropy = 4
-    ready.needsUpdate = true
+    applyTexQuality(ready)
     jpegCache.set(path, ready)
   })
 }
@@ -70,8 +70,7 @@ function useJpegTexture(path: string, srgb: boolean) {
       path,
       (ready) => {
         if (srgb) ready.colorSpace = SRGBColorSpace
-        ready.anisotropy = 4
-        ready.needsUpdate = true
+        applyTexQuality(ready)
         jpegCache.set(path, ready)
         if (!dead) setTex(ready)
       },
@@ -128,6 +127,7 @@ function ClimateShell({ on }: { on: boolean }) {
     ctx.fillRect(0, 0, 1024, 512)
     const t = new CanvasTexture(c)
     t.colorSpace = SRGBColorSpace
+    applyTexQuality(t)
     return t
   }, [])
   if (!on || !tex) return null

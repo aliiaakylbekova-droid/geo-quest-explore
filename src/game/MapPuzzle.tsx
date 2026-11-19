@@ -67,6 +67,34 @@ function easeOut(k: number) {
   return 1 - Math.pow(1 - k, 3)
 }
 
+function nameSize(p: PuzzlePiece) {
+  const bw = Math.max(14, p.x1 - p.x0)
+  const bh = Math.max(10, p.y1 - p.y0)
+  const byBox = Math.min((bw / Math.max(3, p.name.length)) * 1.65, bh * 0.46)
+  return Math.max(8.5, Math.min(15.5, byBox))
+}
+
+function PuzzleName({ piece, dim }: { piece: PuzzlePiece; dim?: boolean }) {
+  const fs = nameSize(piece)
+  return (
+    <text
+      x={piece.cx}
+      y={piece.cy}
+      textAnchor="middle"
+      dominantBaseline="middle"
+      fontSize={fs}
+      fontWeight={700}
+      fill={dim ? "rgba(244,247,251,0.9)" : "#f7f4ea"}
+      stroke="#101810"
+      strokeWidth={Math.max(2.4, fs * 0.2)}
+      paintOrder="stroke"
+      style={{ pointerEvents: "none", fontFamily: 'Inter, "Segoe UI", sans-serif' }}
+    >
+      {piece.name}
+    </text>
+  )
+}
+
 export function MapPuzzle({
   lockedContinent,
   lockedDiff,
@@ -411,23 +439,27 @@ export function MapPuzzle({
         ))}
         {pieces.map((p) =>
           placed.includes(p.iso) ? (
-            <path
-              key={`ok-${p.iso}`}
-              d={p.d}
-              fill={p.color}
-              stroke={flashIso === p.iso ? GOLD_SELECT : "#3d4a40"}
-              strokeWidth={flashIso === p.iso ? 2.2 : 1.05}
-              filter={flashIso === p.iso ? "url(#gold-glow)" : "url(#terrain-shadow)"}
-            />
+            <g key={`ok-${p.iso}`}>
+              <path
+                d={p.d}
+                fill={p.color}
+                stroke={flashIso === p.iso ? GOLD_SELECT : "#3d4a40"}
+                strokeWidth={flashIso === p.iso ? 2.2 : 1.05}
+                filter={flashIso === p.iso ? "url(#gold-glow)" : "url(#terrain-shadow)"}
+              />
+              <PuzzleName piece={p} />
+            </g>
           ) : (
-            <path
-              key={`slot-${p.iso}`}
-              d={p.d}
-              fill={live?.iso === p.iso && live.over ? "rgba(232,197,71,0.28)" : "#3c4a36"}
-              stroke={live?.iso === p.iso && live.over ? GOLD_SELECT : "#c4b48a"}
-              strokeWidth={live?.iso === p.iso && live.over ? 1.8 : 1.1}
-              strokeDasharray={live?.iso === p.iso && live.over ? undefined : "4 3"}
-            />
+            <g key={`slot-${p.iso}`}>
+              <path
+                d={p.d}
+                fill={live?.iso === p.iso && live.over ? "rgba(232,197,71,0.28)" : "#3c4a36"}
+                stroke={live?.iso === p.iso && live.over ? GOLD_SELECT : "#c4b48a"}
+                strokeWidth={live?.iso === p.iso && live.over ? 1.8 : 1.1}
+                strokeDasharray={live?.iso === p.iso && live.over ? undefined : "4 3"}
+              />
+              <PuzzleName piece={p} dim />
+            </g>
           ),
         )}
       </svg>

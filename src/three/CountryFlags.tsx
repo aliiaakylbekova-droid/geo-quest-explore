@@ -2,13 +2,13 @@ import { useEffect, useMemo, useState } from "react"
 import {
   CanvasTexture,
   DoubleSide,
-  LinearFilter,
   SRGBColorSpace,
   type BufferGeometry,
 } from "three"
 import { isoOf, loadCatalog } from "../geo/catalog"
 import { useGame } from "../store/gameStore"
 import { countryFillGeometry, EARTH_R, isPolarFeature } from "./geo"
+import { applyTexQuality } from "./texQuality"
 
 const texCache = new Map<string, CanvasTexture>()
 const geoCache = new Map<string, BufferGeometry>()
@@ -21,21 +21,20 @@ function raster(iso: string) {
     const img = new Image()
     img.onload = () => {
       const c = document.createElement("canvas")
-      c.width = 128
-      c.height = 64
+      c.width = 256
+      c.height = 128
       const ctx = c.getContext("2d", { alpha: false, willReadFrequently: false })
       if (!ctx) {
         resolve(null)
         return
       }
-      ctx.drawImage(img, 0, 0, 128, 64)
+      ctx.imageSmoothingEnabled = true
+      ctx.imageSmoothingQuality = "high"
+      ctx.drawImage(img, 0, 0, 256, 128)
       const tex = new CanvasTexture(c)
       tex.colorSpace = SRGBColorSpace
-      tex.generateMipmaps = false
-      tex.minFilter = LinearFilter
-      tex.magFilter = LinearFilter
       tex.flipY = true
-      tex.needsUpdate = true
+      applyTexQuality(tex)
       resolve(tex)
     }
     img.onerror = () => resolve(null)
