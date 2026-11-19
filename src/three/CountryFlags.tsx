@@ -8,7 +8,7 @@ import {
 } from "three"
 import { isoOf, loadCatalog } from "../geo/catalog"
 import { useGame } from "../store/gameStore"
-import { countryBboxSpan, countryFillGeometry, EARTH_R } from "./geo"
+import { countryFillGeometry, EARTH_R, isPolarFeature } from "./geo"
 
 const texCache = new Map<string, CanvasTexture>()
 const geoCache = new Map<string, BufferGeometry>()
@@ -95,16 +95,17 @@ function FlagCountry({
   iso,
   selected,
   highlighted,
-  opened,
+  fresh,
 }: {
   feature: GeoJSON.Feature
   iso: string
   selected: boolean
   highlighted: boolean
-  opened: boolean
+  fresh: boolean
 }) {
   const geo = useMemo(() => geoCache.get(iso) ?? geometryFor(iso, feature), [iso, feature])
   const [map, setMap] = useState<CanvasTexture | null>(() => texCache.get(iso) ?? null)
+  const [opacity, setOpacity] = useState(fresh ? 0 : 1)
 
   useEffect(() => {
     if (map) return
@@ -117,8 +118,26 @@ function FlagCountry({
     }
   }, [iso, map])
 
+  useEffect(() => {
+    if (!fresh) {
+      setOpacity(1)
+      return
+    }
+    setOpacity(0)
+    let raf = 0
+    const t0 = performance.now()
+    const step = (now: number) => {
+      const k = Math.min(1, (now - t0) / 680)
+      const ease = 1 - (1 - k) ** 3
+      setOpacity(ease)
+      if (k < 1) raf = window.requestAnimationFrame(step)
+    }
+    raf = window.requestAnimationFrame(step)
+    return () => window.cancelAnimationFrame(raf)
+  }, [fresh, iso])
+
   if (!geo || !map) return null
-  const tint = selected || highlighted ? "#fff4c2" : opened ? "#ffffff" : "#dbe3ec"
+  const tint = selected || highlighted ? "#fff4c2" : "#ffffff"
   return (
     <mesh geometry={geo} raycast={() => undefined}>
       <meshBasicMaterial
@@ -126,77 +145,62 @@ function FlagCountry({
         color={tint}
         side={DoubleSide}
         toneMapped={false}
+        transparent={opacity < 0.999}
+        opacity={opacity}
         polygonOffset
         polygonOffsetFactor={-2}
         polygonOffsetUnits={-4}
-        depthWrite
+        depthWrite={opacity >= 0.999}
       />
     </mesh>
   )
 }
 
-type FlagItem = { iso: string; feature: GeoJSON.Feature }
-
 export function CountryFlags() {
+  const stage = useGame((s) => s.stage)
   const selectedIso = useGame((s) => s.selectedIso)
   const highlightIso = useGame((s) => s.highlightIso)
-  const visited = useGame((s) => s.progress.visited)
-  const introPhase = useGame((s) => s.introPhase)
-  const opened = useMemo(() => new Set(visited), [visited])
-  const [features, setFeatures] = useState<GeoJSON.Feature[]>([])
-  const [built, setBuilt] = useState<FlagItem[]>([])
+  const unlocked = useGame((s) => s.progress.flagUnlocked)
+  const flagFillIso = useGame((s) => s.flagFillIso)
+  const [byIso, setByIso] = useState<Map<string, GeoJSON.Feature>>(() => new Map())
 
   useEffect(() => {
-    void loadCatalog().then((pack) => setFeatures(pack.features))
+    void loadCatalog().then((pack) => {
+      const next = new Map<string, GeoJSON.Feature>()
+      for (const feature of pack.features) {
+        const iso = isoOf(feature)
+        if (!iso || iso.length !== 2 || iso === "-99" || iso === "AQ") continue
+        if (isPolarFeature(feature)) continue
+        next.set(iso, feature)
+      }
+      setByIso(next)
+    })
   }, [])
 
-  useEffect(() => {
-    if (introPhase !== "ready" || !features.length) {
-      setBuilt([])
-      return
-    }
-    const items: (FlagItem & { span: number })[] = []
-    const seen = new Set<string>()
-    for (const feature of features) {
-      const iso = isoOf(feature)
-      if (!iso || iso.length !== 2 || iso === "-99" || seen.has(iso)) continue
-      seen.add(iso)
-      items.push({ iso, feature, span: countryBboxSpan(feature) })
-    }
-    items.sort((a, b) => b.span - a.span)
+  const isos = useMemo(() => {
+    const list = [...unlocked]
+    if (flagFillIso && !list.includes(flagFillIso)) list.push(flagFillIso)
+    return list
+  }, [unlocked, flagFillIso])
 
-    let i = 0
-    let raf = 0
-    let cancelled = false
-    const kick = window.setTimeout(() => {
-      const step = () => {
-        if (cancelled) return
-        const end = Math.min(i + 6, items.length)
-        for (; i < end; i += 1) geometryFor(items[i].iso, items[i].feature)
-        setBuilt(items.slice(0, i).map(({ iso, feature }) => ({ iso, feature })))
-        if (i < items.length) raf = window.requestAnimationFrame(step)
-      }
-      raf = window.requestAnimationFrame(step)
-    }, 320)
-    return () => {
-      cancelled = true
-      window.clearTimeout(kick)
-      window.cancelAnimationFrame(raf)
-    }
-  }, [features, introPhase])
+  if (stage !== "flag") return null
 
   return (
     <group>
-      {built.map(({ iso, feature }) => (
-        <FlagCountry
-          key={iso}
-          iso={iso}
-          feature={feature}
-          selected={selectedIso === iso}
-          highlighted={highlightIso === iso}
-          opened={opened.has(iso)}
-        />
-      ))}
+      {isos.map((iso) => {
+        const feature = byIso.get(iso)
+        if (!feature) return null
+        return (
+          <FlagCountry
+            key={iso}
+            iso={iso}
+            feature={feature}
+            selected={selectedIso === iso}
+            highlighted={highlightIso === iso}
+            fresh={flagFillIso === iso}
+          />
+        )
+      })}
     </group>
   )
 }

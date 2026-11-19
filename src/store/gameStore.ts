@@ -19,7 +19,20 @@ export type CampaignPhase = "play" | "correct" | "success" | "wrong" | "timeout"
 export type HitTint = "gold" | "cyan" | "red" | "orange" | null
 
 let autoAdvanceTimer = 0
+const flagFlowTimers: number[] = []
 const TIMEOUT_PENALTY = 20
+
+function clearFlagFlow() {
+  while (flagFlowTimers.length) {
+    const id = flagFlowTimers.pop()
+    if (id) window.clearTimeout(id)
+  }
+}
+
+function canFlagFill(iso: string | null) {
+  if (!iso || iso === "AQ" || iso === "-99") return false
+  return continentOf(iso) !== "Antarctica"
+}
 
 export type FlyTo = { lat: number; lng: number; dist: number } | null
 
@@ -49,6 +62,7 @@ export type Progress = {
   dailyDate: string
   dailyTasks: DailyTask[]
   dailyComplete: boolean
+  flagUnlocked: string[]
 }
 
 const defaultProgress = (): Progress => ({
@@ -77,6 +91,7 @@ const defaultProgress = (): Progress => ({
   dailyDate: "",
   dailyTasks: [],
   dailyComplete: false,
+  flagUnlocked: [],
 })
 
 function ensureDaily(progress: Progress): Progress {
@@ -158,6 +173,7 @@ type GameState = {
   hitTint: HitTint
   spinBoost: number
   flagPins: string[]
+  flagFillIso: string | null
   screenFlash: "red" | null
   flagMoment: "win" | "lose" | null
   lastPenalty: number
@@ -184,6 +200,7 @@ type GameState = {
   setDifficulty: (d: Progress["difficulty"]) => void
   setVolume: (v: number) => void
   setMusic: (on: boolean) => void
+  toggleMusic: () => void
   setSfx: (on: boolean) => void
   setMusicVol: (v: number) => void
   setSfxVol: (v: number) => void
@@ -234,6 +251,7 @@ export const useGame = create<GameState>((set, get) => ({
   hitTint: null,
   spinBoost: 0,
   flagPins: [],
+  flagFillIso: null,
   screenFlash: null,
   flagMoment: null,
   lastPenalty: 0,
@@ -257,6 +275,7 @@ export const useGame = create<GameState>((set, get) => ({
       const saved = ((await withTime(api?.getProgress() as Promise<Progress> | undefined)) ??
         (localStorage.getItem("gq-progress") ? JSON.parse(localStorage.getItem("gq-progress")!) : null)) as Progress | null
       let progress = touchLogin(saved ? { ...defaultProgress(), ...saved } : defaultProgress())
+      if (!Array.isArray(progress.flagUnlocked)) progress = { ...progress, flagUnlocked: [] }
       let nextProfile = profile
       if (!nextProfile) {
         const cloud = await cloudPull()
@@ -313,10 +332,14 @@ export const useGame = create<GameState>((set, get) => ({
     let progress = get().progress
     if (stage === "explore") progress = grant(progress, "globe-spin")
     const home = stage === "explore" && get().stage !== "explore"
+    if (home || stage !== "flag") {
+      clearFlagFlow()
+    }
     set({
       stage,
       campaign: stage === "mission" ? get().campaign : null,
       lastFeedback: null,
+      flagFillIso: stage === "flag" ? get().flagFillIso : null,
       flyTo: home ? { lat: 25, lng: 12, dist: 6.5 } : get().flyTo,
       ...(home
         ? {
@@ -326,6 +349,7 @@ export const useGame = create<GameState>((set, get) => ({
             lastCountryName: null,
             mission: null,
             missionEndsAt: null,
+            flagFillIso: null,
           }
         : {}),
     })
@@ -416,12 +440,21 @@ export const useGame = create<GameState>((set, get) => ({
       const diffBonus = progress.difficulty === "hard" ? 15 : progress.difficulty === "easy" ? 0 : 8
       const gained = reward + streakBonus + openBonus + diffBonus
       const beforeLevel = playerLevel(progress.xp)
+      const fillable = useFlag && canFlagFill(hit.iso)
+      const alreadyFilled = Boolean(fillable && hit.iso && progress.flagUnlocked.includes(hit.iso))
+      const flagUnlocked =
+        fillable && hit.iso && !progress.flagUnlocked.includes(hit.iso)
+          ? [...progress.flagUnlocked, hit.iso]
+          : progress.flagUnlocked
       let scored: Progress = {
         ...progress,
+        missionsDone: get().progress.missionsDone,
+        journal: get().progress.journal,
         xp: progress.xp + gained,
         coins: progress.coins + 20 + (isNewCountry ? 10 : 0),
         playStreak,
         bestPlayStreak: Math.max(progress.bestPlayStreak, playStreak),
+        flagUnlocked,
       }
       if (useDaily && st.activeDailyId) {
         const dailyTasks = scored.dailyTasks.map((task) => (task.id === st.activeDailyId ? { ...task, done: true } : task))
@@ -434,27 +467,56 @@ export const useGame = create<GameState>((set, get) => ({
       if (isNewCountry) audio.play("unlock")
       if (playerLevel(scored.xp) > beforeLevel) audio.play("transition")
       const toastText = isNewCountry ? t().play.openedCountry : t().play.correctLocation
+      const missionId = st.mission?.id
+      clearFlagFlow()
       set({
         selectedIso: hit.iso,
         highlightIso: hit.iso,
         lastHit: hit,
-        lastCountryName: name,
+        lastCountryName: useFlag ? null : name,
         progress: scored,
-        displayXp: scored.xp,
+        displayXp: useFlag ? st.progress.xp : scored.xp,
         campaignPhase: useCampaign ? "success" : st.campaignPhase,
         hitTint: "gold",
         spinBoost: 0,
         flagPins: pins,
+        flagFillIso: useFlag && alreadyFilled && fillable ? hit.iso : null,
         screenFlash: null,
-        flagMoment: useFlag ? "win" : get().flagMoment,
+        flagMoment: null,
         lastFeedback: { ok: true, text: toastText },
         flyTo: hit.iso ? { lat: hit.lat, lng: hit.lng, dist: 3.15 } : st.flyTo,
-        toast: { text: toastText, kind: freshAch.length ? "ach" : "ok" },
-        rewardPulse: gained,
+        toast: useFlag ? null : { text: toastText, kind: freshAch.length ? "ach" : "ok" },
+        rewardPulse: useFlag ? 0 : gained,
         activeDailyId: useDaily && scored.dailyTasks.find((task) => task.id === st.activeDailyId)?.done ? null : st.activeDailyId,
       })
-      for (let i = 0; i < 6; i += 1) window.setTimeout(() => audio.play("xp"), 80 * i)
       void persist(scored)
+      if (useFlag) {
+        const fillDelay = alreadyFilled || !fillable ? 80 : 280
+        flagFlowTimers.push(
+          window.setTimeout(() => {
+            if (get().mission?.id !== missionId) return
+            set({ flagFillIso: fillable ? hit.iso : null })
+          }, fillDelay),
+        )
+        flagFlowTimers.push(
+          window.setTimeout(() => {
+            if (get().mission?.id !== missionId) return
+            set({ lastCountryName: name, rewardPulse: gained, displayXp: scored.xp })
+            for (let i = 0; i < 6; i += 1) window.setTimeout(() => audio.play("xp"), 80 * i)
+          }, fillDelay + 720),
+        )
+        flagFlowTimers.push(
+          window.setTimeout(() => {
+            if (get().mission?.id !== missionId) return
+            set({
+              toast: { text: toastText, kind: "ok" },
+              flagMoment: "win",
+            })
+          }, fillDelay + 1280),
+        )
+      } else {
+        for (let i = 0; i < 6; i += 1) window.setTimeout(() => audio.play("xp"), 80 * i)
+      }
       if (useCampaign) {
         window.clearTimeout(autoAdvanceTimer)
         autoAdvanceTimer = window.setTimeout(() => {
@@ -463,30 +525,30 @@ export const useGame = create<GameState>((set, get) => ({
       }
     } else {
       audio.play("fail")
-      if (useFlag) audio.play("ambient")
       const hint = useFlag ? t().play.flagWrong : useCampaign ? st.campaign!.hint : st.mission?.hint || t().play.tryElsewhere
       const broken = { ...progress, playStreak: 0 }
+      clearFlagFlow()
       set({
-        selectedIso: hit.iso,
+        selectedIso: useFlag ? null : hit.iso,
+        highlightIso: useFlag ? st.highlightIso : get().highlightIso,
         lastHit: hit,
-        lastCountryName: name,
+        lastCountryName: useFlag ? null : name,
         progress: broken,
         campaignPhase: useCampaign ? "wrong" : st.campaignPhase,
         hitTint: "red",
-        screenFlash: useFlag ? "red" : null,
-        flagMoment: useFlag ? "lose" : get().flagMoment,
+        screenFlash: null,
+        flagMoment: null,
+        flagFillIso: get().flagFillIso,
         lastFeedback: { ok: false, text: hint },
       })
       void persist(broken)
-      if (useFlag) {
-        window.setTimeout(() => {
-          if (get().screenFlash === "red") set({ screenFlash: null })
-        }, 2300)
-      }
       window.setTimeout(() => {
-        if (get().campaignPhase !== "wrong") return
-        set({ campaignPhase: useCampaign ? "play" : get().campaignPhase, hitTint: null })
-      }, 2200)
+        if (get().hitTint !== "red") return
+        set({
+          hitTint: null,
+          campaignPhase: useCampaign ? "play" : get().campaignPhase,
+        })
+      }, useFlag ? 640 : 2200)
     }
     void fact
   },
@@ -513,6 +575,7 @@ export const useGame = create<GameState>((set, get) => ({
     const flagLike = mission.kind === "flag" || mission.kind === "capital" || mission.kind === "neighbors" || mission.kind === "shape"
     const daily = mission.id.startsWith("daily-")
     audio.play("transition")
+    clearFlagFlow()
     set({
       mission,
       campaign: flagLike || daily ? null : get().campaign,
@@ -520,11 +583,15 @@ export const useGame = create<GameState>((set, get) => ({
       missionEndsAt: Date.now() + mission.timeMs * bonus,
       lastFeedback: null,
       flagMoment: null,
+      flagFillIso: null,
       lastPenalty: 0,
       highlightIso: flagLike || daily ? null : (mission.targetIso ?? null),
+      selectedIso: flagLike ? null : get().selectedIso,
+      lastCountryName: flagLike ? null : get().lastCountryName,
       stage: flagLike ? "flag" : "mission",
       activeDailyId: daily ? mission.id : null,
       toast: null,
+      rewardPulse: 0,
       flyTo: flagLike || daily
         ? { lat: 22, lng: 18, dist: 6.6 }
         : mission.lat != null
@@ -533,19 +600,23 @@ export const useGame = create<GameState>((set, get) => ({
     })
   },
 
-  clearMission: () =>
+  clearMission: () => {
+    clearFlagFlow()
     set({
       mission: null,
       missionEndsAt: null,
       highlightIso: null,
       lastFeedback: null,
       flagMoment: null,
+      flagFillIso: null,
       stage: "explore",
       flyTo: { lat: 18, lng: 20, dist: 6.5 },
-    }),
+    })
+  },
 
   exitToPlaque: () => {
     window.clearTimeout(autoAdvanceTimer)
+    clearFlagFlow()
     set({
       stage: "register",
       introPhase: "card",
@@ -557,6 +628,7 @@ export const useGame = create<GameState>((set, get) => ({
       hitTint: null,
       screenFlash: null,
       flagPins: [],
+      flagFillIso: null,
       flagMoment: null,
       lastPenalty: 0,
       advancing: false,
@@ -610,6 +682,13 @@ export const useGame = create<GameState>((set, get) => ({
     const progress = { ...get().progress, musicOn: on }
     set({ progress })
     void persist(progress)
+  },
+
+  toggleMusic: () => {
+    const on = !get().progress.musicOn
+    if (on) audio.unlock()
+    get().setMusic(on)
+    if (on) audio.play("ambient")
   },
 
   setSfx: (on) => {

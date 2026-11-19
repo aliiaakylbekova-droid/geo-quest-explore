@@ -85,6 +85,26 @@ function polygonsOf(geom: GeoJSON.Geometry): number[][][][] {
   return []
 }
 
+function ringIsPolar(ring: [number, number][]) {
+  if (!ring.length) return true
+  return ring.every(([, lat]) => lat < -60)
+}
+
+export function isPolarFeature(feature: GeoJSON.Feature) {
+  const geom = feature.geometry
+  if (!geom) return false
+  let maxLat = -Infinity
+  let minLat = Infinity
+  for (const polygon of polygonsOf(geom)) {
+    const ring = unwrapRing(polygon[0] || [])
+    for (const [, lat] of ring) {
+      if (lat < minLat) minLat = lat
+      if (lat > maxLat) maxLat = lat
+    }
+  }
+  return minLat < -60 && maxLat < -55
+}
+
 /** Triangulated country mesh on the sphere. UVs map the unwrapped bbox so a flag texture clips to the border. */
 export function countryFillGeometry(feature: GeoJSON.Feature, radius = EARTH_R + 0.0036): BufferGeometry | null {
   const geom = feature.geometry
@@ -95,7 +115,7 @@ export function countryFillGeometry(feature: GeoJSON.Feature, radius = EARTH_R +
 
   for (const polygon of polygonsOf(geom)) {
     if (!polygon[0] || polygon[0].length < 3) continue
-    const rings = polygon.map(unwrapRing).filter((ring) => ring.length >= 3)
+    const rings = polygon.map(unwrapRing).filter((ring) => ring.length >= 3 && !ringIsPolar(ring))
     if (!rings.length) continue
 
     let minLng = Infinity

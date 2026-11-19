@@ -40,6 +40,7 @@ function progressRow(userId: string, progress: Progress) {
     daily_date: progress.dailyDate,
     daily_tasks: progress.dailyTasks,
     daily_complete: progress.dailyComplete,
+    flag_unlocked: progress.flagUnlocked,
     updated_at: new Date().toISOString(),
   }
 }
@@ -71,6 +72,7 @@ function progressFromRow(row: Record<string, unknown>): Progress {
     dailyDate: String(row.daily_date || ""),
     dailyTasks: Array.isArray(row.daily_tasks) ? (row.daily_tasks as Progress["dailyTasks"]) : [],
     dailyComplete: Boolean(row.daily_complete),
+    flagUnlocked: Array.isArray(row.flag_unlocked) ? (row.flag_unlocked as string[]) : [],
   }
 }
 

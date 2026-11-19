@@ -28,7 +28,6 @@ export function CampaignOverlay() {
   const lastCountryName = useGame((s) => s.lastCountryName)
   const progress = useGame((s) => s.progress)
   const lastFeedback = useGame((s) => s.lastFeedback)
-  const flagMoment = useGame((s) => s.flagMoment)
   const lastPenalty = useGame((s) => s.lastPenalty)
   const mission = useGame((s) => s.mission)
   const stage = useGame((s) => s.stage)
@@ -50,34 +49,7 @@ export function CampaignOverlay() {
       </div>
     )
   }
-  if (stage === "flag" && (flagMoment || lastFeedback)) {
-    if (flagMoment === "win" || lastFeedback?.ok) {
-      if (toast) return null
-      return (
-        <div className="gq-ticket is-compact" data-result="ticket">
-          <p className="gq-verdict is-ok">{ui.verdictOk}</p>
-          <p className="gq-ticket-copy">{ui.nextTicket}</p>
-        </div>
-      )
-    }
-    return (
-      <>
-        <div className="gq-wrong-center" data-result="wrong">
-          <p className="gq-verdict is-bad">{ui.verdictBad}</p>
-          <p className="gq-bang" aria-hidden>
-            !
-          </p>
-          <h2>{ui.flagWrong}</h2>
-        </div>
-        {mission?.hint ? (
-          <aside className="gq-hint-drawer" data-result="hint">
-            <p className="kicker">{ui.hint}</p>
-            <p>{mission.hint}</p>
-          </aside>
-        ) : null}
-      </>
-    )
-  }
+  if (stage === "flag") return null
   if (!campaign && lastFeedback) {
     if (lastFeedback.ok) {
       if (toast) return null

@@ -27,6 +27,15 @@ export default function App() {
         btn?.click()
       },
       flagTarget: () => useGame.getState().mission?.targetIso ?? null,
+      flagHit: () => {
+        const m = useGame.getState().mission
+        if (!m?.targetIso) return
+        useGame.getState().pick({ iso: m.targetIso, lat: m.lat ?? 0, lng: m.lng ?? 0 })
+      },
+      flagMiss: () => {
+        useGame.getState().pick({ iso: "XX", lat: 0, lng: 0 })
+      },
+      flagUnlocked: () => useGame.getState().progress.flagUnlocked,
       flyTarget: () => {
         const m = useGame.getState().mission
         if (m?.lat != null) useGame.getState().fly(m.lat, m.lng ?? 0, 3.9)

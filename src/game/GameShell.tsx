@@ -23,6 +23,22 @@ function FlagImg({ iso }: { iso: string }) {
   )
 }
 
+function SpeakerIcon({ on }: { on: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 9.2h3.1L12 5.2v13.6L7.1 14.8H4z" />
+      {on ? (
+        <>
+          <path d="M15.6 9.1c1.15 1.05 1.75 2.4 1.75 3.9s-.6 2.85-1.75 3.9" fill="none" />
+          <path d="M18.2 6.6c1.9 1.85 2.9 4.2 2.9 6.4s-1 4.55-2.9 6.4" fill="none" />
+        </>
+      ) : (
+        <path d="M4.2 4.2l15.6 15.6" fill="none" />
+      )}
+    </svg>
+  )
+}
+
 function useTick(endsAt: number | null) {
   const [now, setNow] = useState(Date.now())
   useEffect(() => {
@@ -76,6 +92,7 @@ export function GameShell() {
   const screenFlash = useGame((s) => s.screenFlash)
   const toast = useGame((s) => s.toast)
   const rewardPulse = useGame((s) => s.rewardPulse)
+  const displayXp = useGame((s) => s.displayXp)
   const openDaily = useGame((s) => s.openDaily)
   const playDailyTask = useGame((s) => s.playDailyTask)
   const clearToast = useGame((s) => s.clearToast)
@@ -145,7 +162,10 @@ export function GameShell() {
     pick(hit)
   }
 
-  const flagPool = useMemo(() => getCatalog()?.countries.filter((c) => c.iso.length === 2) ?? [], [stage, selectedIso])
+  const flagPool = useMemo(
+    () => getCatalog()?.countries.filter((c) => c.iso.length === 2 && c.continent !== "Antarctica") ?? [],
+    [stage, selectedIso],
+  )
 
   function newFlagRound(kind: (typeof FLAG_MODES)[number] = "flag") {
     const pool = flagPool.length ? flagPool : [{ iso: "KG", name: "Кыргызстан", capital: "Бишкек", lat: 41.2, lng: 74.6, continent: "Asia", a3: "KGZ", nameEn: "Kyrgyzstan", subregion: "", pop: 0 }]
@@ -250,19 +270,20 @@ export function GameShell() {
   useEffect(() => {
     if (stage !== "flag" || !lastFeedback?.ok || !mission) return
     if (mission.id.startsWith("daily-")) return
-    const id = window.setTimeout(() => newFlagRound("flag"), 2600)
+    const id = window.setTimeout(() => newFlagRound("flag"), 4200)
     return () => window.clearTimeout(id)
   }, [stage, lastFeedback?.ok, mission?.id])
 
   useEffect(() => {
     if (!lastFeedback?.ok || !mission?.id.startsWith("daily-")) return
     const next = progress.dailyTasks.find((task) => !task.done)
+    const wait = stage === "flag" ? 4200 : 2200
     const id = window.setTimeout(() => {
       if (next) playDailyTask(next.id)
       else openDaily()
-    }, 2200)
+    }, wait)
     return () => window.clearTimeout(id)
-  }, [lastFeedback?.ok, mission?.id, progress.dailyTasks, playDailyTask, openDaily])
+  }, [lastFeedback?.ok, mission?.id, progress.dailyTasks, playDailyTask, openDaily, stage])
 
   useEffect(() => {
     if (stage !== "mission" || campaign || !lastFeedback?.ok || !mission) return
@@ -278,8 +299,8 @@ export function GameShell() {
   const dict = t()
   void progress.locale
   const missionIndex = campaign?.number ?? (mission ? Math.max(1, STORY_MISSIONS.findIndex((m) => m.id === mission.id) + 1) : stage === "explore" ? 0 : 1)
-  const level = campaign?.number ?? Math.floor(progress.xp / 120) + 1
-  const xpInto = progress.xp % 120
+  const level = campaign?.number ?? Math.floor(displayXp / 120) + 1
+  const xpInto = displayXp % 120
   const missionProgress = Math.min(1, (progress.campaignDone.length || progress.missionsDone.length) / GEO_CAMPAIGN.length)
 
   const leftTitle = campaign
@@ -342,7 +363,7 @@ export function GameShell() {
             {ui.level} {level}
           </span>
           <span className="sep" />
-          <span>{progress.xp} XP</span>
+          <span>{displayXp} XP</span>
           <span className="sep" />
           <span>
             {ui.streak} {progress.playStreak}
@@ -354,6 +375,17 @@ export function GameShell() {
           {ui.exit}
         </button>
       </header>
+
+      <button
+        type="button"
+        className={`hud-speaker${progress.musicOn ? "" : " is-muted"}`}
+        aria-pressed={progress.musicOn}
+        aria-label={progress.musicOn ? ui.musicMute : ui.musicUnmute}
+        title={progress.musicOn ? ui.musicMute : ui.musicUnmute}
+        onClick={() => useGame.getState().toggleMusic()}
+      >
+        <SpeakerIcon on={progress.musicOn} />
+      </button>
 
       <div className="hud-stack" id="gq-hud-stack">
       <aside className="hud-left">
@@ -405,10 +437,13 @@ export function GameShell() {
               </button>
             </>
           ) : null}
-          {(stage === "mission" || stage === "flag") && mission ? (
+          {stage === "flag" && mission && lastFeedback && !lastFeedback.ok ? (
+            <p className="bad">{lastFeedback.text}</p>
+          ) : null}
+          {stage === "mission" && mission && lastFeedback ? (
             <>
-              {lastFeedback ? <p className={lastFeedback.ok ? "ok" : "bad"}>{lastFeedback.text}</p> : null}
-              {lastFeedback?.ok ? <p className="recap">{mission.recap}</p> : null}
+              <p className={lastFeedback.ok ? "ok" : "bad"}>{lastFeedback.text}</p>
+              {lastFeedback.ok ? <p className="recap">{mission.recap}</p> : null}
             </>
           ) : null}
           {stage === "journal" ? (
@@ -469,11 +504,6 @@ export function GameShell() {
           ) : null}
           {stage === "settings" ? (
             <div className="audio-set">
-              <label className="audio-row">
-                <span>{ui.music}</span>
-                <input type="checkbox" checked={progress.musicOn} onChange={(e) => useGame.getState().setMusic(e.target.checked)} />
-              </label>
-              <input type="range" min={0} max={1} step={0.05} value={progress.musicVol} onChange={(e) => useGame.getState().setMusicVol(Number(e.target.value))} />
               <label className="audio-row">
                 <span>{ui.sfx}</span>
                 <input type="checkbox" checked={progress.sfxOn} onChange={(e) => useGame.getState().setSfx(e.target.checked)} />
@@ -547,7 +577,7 @@ export function GameShell() {
           </div>
           <div className={`xp-track${rewardPulse ? " is-reward" : ""}`}>
             <span>
-              XP {progress.xp} · {xpInto}/120
+              XP {displayXp} · {xpInto}/120
               {rewardPulse ? ` · +${rewardPulse}` : ""}
             </span>
             <div className="bar">
@@ -635,9 +665,11 @@ export function GameShell() {
             {hoverTip.capital ? <em className="gq-tip-cap">{hoverTip.capital}</em> : null}
           </div>
         ) : null}
-        {!hideNames && lastCountryName && (hitTint === "gold" || hitTint === "cyan" || selectedIso) ? (
+        {stage === "flag" && lastCountryName ? (
+          <div className={`gq-select-chip tint-${hitTint || "gold"}`}>{lastCountryName}</div>
+        ) : !hideNames && stage !== "flag" && lastCountryName && (hitTint === "gold" || hitTint === "cyan" || selectedIso) ? (
           <div className={`gq-select-chip tint-${hitTint || "cyan"}`}>{lastCountryName}</div>
-        ) : !hideNames && country ? (
+        ) : !hideNames && stage !== "flag" && country ? (
           <div className="gq-select-chip">{country.name}</div>
         ) : null}
       </main>

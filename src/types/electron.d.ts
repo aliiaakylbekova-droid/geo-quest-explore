@@ -24,6 +24,9 @@ declare global {
       pick: (iso: string | null, lat: number, lng: number) => void
       flag: () => void
       flagTarget: () => string | null
+      flagUnlocked: () => string[]
+      flagHit: () => void
+      flagMiss: () => void
       flyTarget: () => void
       timeout: () => void
       coins: () => number
