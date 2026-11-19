@@ -1,6 +1,7 @@
 import { EarthBundle } from "../game/GlobeMap"
 import { CameraRig } from "./CameraRig"
 import { ErrorBoundary } from "./ErrorBoundary"
+import type { GlobeHover } from "./GlobePick"
 import { LandmarkScene } from "./LandmarkWorld"
 import { WorldCanvas } from "./WorldCanvas"
 
@@ -15,7 +16,7 @@ export function StageView({
   scene: "tian-shan" | "eiffel" | "giza"
   onPick: (hit: { iso: string | null; lat: number; lng: number }) => void
   onPoint: (title: string, text: string) => void
-  onHover?: (hit: { iso: string | null; name: string | null; x: number; y: number } | null) => void
+  onHover?: (hit: GlobeHover | null) => void
 }) {
   return (
     <ErrorBoundary>

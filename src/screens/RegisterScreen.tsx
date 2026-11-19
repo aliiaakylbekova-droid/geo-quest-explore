@@ -18,8 +18,7 @@ export function RegisterScreen() {
   const ui = t().play
 
   useEffect(() => {
-    tryStartMusic()
-    const kick = () => tryStartMusic()
+    const kick = () => audio.unlock()
     window.addEventListener("pointerdown", kick, { once: true })
     window.addEventListener("keydown", kick, { once: true })
     return () => {

@@ -1,8 +1,9 @@
 import { create } from "zustand"
 import { audio } from "../audio/AudioManager"
 import { GEO_CAMPAIGN, type CampaignLevel } from "../data/campaign"
-import { countryNameOf, evaluateLevel, evaluateMission } from "../geo/hitTest"
-import { LANDMARKS } from "../geo/catalog"
+import { buildDailyTasks, dailyToMission, shiftDate, todayKey, type DailyTask } from "../data/daily"
+import { countryNameOf, continentOf, evaluateLevel, evaluateMission } from "../geo/hitTest"
+import { getCatalog, LANDMARKS } from "../geo/catalog"
 import { costForHint, rulesFor, type RoundRules } from "../game/difficulty"
 import { buildExtraHints } from "../game/hintLadder"
 import type { StoryMission } from "../game/storyMissions"
@@ -13,7 +14,8 @@ import { cloudPull, cloudPush, cloudResetProgress } from "../net/cloud"
 import { publishScore } from "../net/leaderboard"
 import type { Profile } from "../types/electron"
 
-export type Stage = "register" | "explore" | "discover" | "mission" | "flag" | "journal" | "settings"
+export type Stage = "register" | "explore" | "discover" | "mission" | "flag" | "journal" | "settings" | "daily"
+export type ToastKind = "ok" | "xp" | "ach"
 export type IntroPhase = "card" | "approach" | "ready"
 export type CampaignPhase = "play" | "correct" | "success" | "wrong" | "timeout" | "levelComplete" | "campaignComplete" | "transition"
 export type HitTint = "gold" | "cyan" | "red" | "orange" | null
@@ -50,6 +52,15 @@ export type Progress = {
   locale: Locale
   campaignIndex: number
   campaignDone: string[]
+  loginStreak: number
+  bestLoginStreak: number
+  lastLoginDate: string
+  loginDates: string[]
+  playStreak: number
+  bestPlayStreak: number
+  dailyDate: string
+  dailyTasks: DailyTask[]
+  dailyComplete: boolean
 }
 
 const defaultProgress = (): Progress => ({
@@ -69,7 +80,75 @@ const defaultProgress = (): Progress => ({
   locale: "ru",
   campaignIndex: 0,
   campaignDone: [],
+  loginStreak: 0,
+  bestLoginStreak: 0,
+  lastLoginDate: "",
+  loginDates: [],
+  playStreak: 0,
+  bestPlayStreak: 0,
+  dailyDate: "",
+  dailyTasks: [],
+  dailyComplete: false,
 })
+
+function ensureDaily(progress: Progress): Progress {
+  const day = todayKey()
+  const countries = getCatalog()?.countries ?? []
+  if (progress.dailyDate === day && progress.dailyTasks.length) return progress
+  return {
+    ...progress,
+    dailyDate: day,
+    dailyTasks: buildDailyTasks(day, countries),
+    dailyComplete: false,
+  }
+}
+
+function touchLogin(progress: Progress): Progress {
+  const day = todayKey()
+  let next = progress
+  if (progress.lastLoginDate !== day) {
+    const dates = progress.loginDates.includes(day) ? progress.loginDates : [...progress.loginDates, day].slice(-120)
+    const streak = progress.lastLoginDate && shiftDate(day, -1) === progress.lastLoginDate ? progress.loginStreak + 1 : 1
+    next = {
+      ...progress,
+      lastLoginDate: day,
+      loginDates: dates,
+      loginStreak: streak,
+      bestLoginStreak: Math.max(progress.bestLoginStreak, streak),
+    }
+  }
+  return ensureDaily(next)
+}
+
+function playerLevel(xp: number) {
+  return Math.floor(xp / 120) + 1
+}
+
+function grantMany(progress: Progress, ids: string[]) {
+  let next = progress
+  for (const id of ids) next = grant(next, id)
+  return next
+}
+
+function achievementIdsFor(progress: Progress) {
+  const ids: string[] = []
+  if (progress.visited.length >= 10) ids.push("open-10")
+  if (progress.visited.length >= 50) ids.push("open-50")
+  if (progress.visited.length >= 100) ids.push("open-100")
+  if (progress.playStreak >= 5) ids.push("streak-5")
+  if (progress.playStreak >= 10) ids.push("streak-10")
+  if (progress.loginStreak >= 3) ids.push("login-3")
+  if (progress.xp >= 500) ids.push("xp-500")
+  if (progress.xp >= 1500) ids.push("xp-1500")
+  if (progress.dailyComplete) ids.push("daily-first")
+  if (progress.missionsDone.length >= 1) ids.push("first-mission")
+  const asia = progress.visited.filter((iso) => continentOf(iso) === "Asia").length
+  if (asia >= 12) ids.push("asia-12")
+  const silk = ["KG", "KZ", "UZ", "TJ", "TM"]
+  if (silk.every((iso) => progress.visited.includes(iso))) ids.push("silk-road")
+  if (progress.stamps.length >= 3) ids.push("collector")
+  return ids
+}
 
 type GameState = {
   ready: boolean
@@ -104,6 +183,9 @@ type GameState = {
   hintLines: string[]
   pulseIsos: string[]
   pulseCenter: { lat: number; lng: number } | null
+  toast: { text: string; kind: ToastKind } | null
+  rewardPulse: number
+  activeDailyId: string | null
   hydrate: () => Promise<void>
   register: (name: string, avatar: string) => Promise<void>
   finishIntro: () => void
@@ -135,6 +217,10 @@ type GameState = {
   restartAfterTimeout: () => void
   exitToPlaque: () => void
   syncAudio: () => void
+  openDaily: () => void
+  playDailyTask: (id: string) => void
+  reseedDaily: () => void
+  clearToast: () => void
 }
 
 async function persist(progress: Progress, profile?: Profile | null) {
@@ -177,6 +263,9 @@ export const useGame = create<GameState>((set, get) => ({
   advancing: false,
   roundRules: null,
   ...HINT_RESET,
+  toast: null,
+  rewardPulse: 0,
+  activeDailyId: null,
 
   hydrate: async () => {
     try {
@@ -190,13 +279,13 @@ export const useGame = create<GameState>((set, get) => ({
         (localStorage.getItem("gq-profile") ? (JSON.parse(localStorage.getItem("gq-profile")!) as Profile) : null)
       const saved = ((await withTime(api?.getProgress() as Promise<Progress> | undefined)) ??
         (localStorage.getItem("gq-progress") ? JSON.parse(localStorage.getItem("gq-progress")!) : null)) as Progress | null
-      let progress = saved ? { ...defaultProgress(), ...saved } : defaultProgress()
+      let progress = touchLogin(saved ? { ...defaultProgress(), ...saved } : defaultProgress())
       let nextProfile = profile
       if (!nextProfile) {
         const cloud = await cloudPull()
         if (cloud.profile) {
           nextProfile = cloud.profile
-          if (cloud.progress) progress = { ...defaultProgress(), ...cloud.progress }
+          if (cloud.progress) progress = touchLogin({ ...defaultProgress(), ...cloud.progress })
           if (window.geoQuest) {
             await window.geoQuest.saveProfile(nextProfile)
             await window.geoQuest.saveProgress(progress)
@@ -278,24 +367,36 @@ export const useGame = create<GameState>((set, get) => ({
     const busy = st.campaignPhase === "correct" || st.campaignPhase === "success" || st.campaignPhase === "transition"
     if (busy && st.stage !== "flag") return
 
+    const isNewCountry = Boolean(hit.iso && !st.progress.visited.includes(hit.iso))
     const visited =
       hit.iso && !st.progress.visited.includes(hit.iso) ? [...st.progress.visited, hit.iso] : st.progress.visited
-    const progress = { ...st.progress, visited }
+    let progress = { ...st.progress, visited }
     const name = countryNameOf(hit.iso)
     void persist(progress)
 
     const useFlag = st.stage === "flag" && st.mission
     const useStory = !useFlag && st.mission && st.stage === "mission" && !st.campaign
     const useCampaign = !useFlag && st.campaign && st.campaignPhase === "play"
+    const useDaily = Boolean(st.activeDailyId && st.mission && (useFlag || useStory))
 
     if (!useFlag && !useStory && !useCampaign) {
+      if (isNewCountry) {
+        audio.play("unlock")
+        progress = { ...progress, xp: progress.xp + 15, coins: progress.coins + 10 }
+        progress = grantMany(progress, achievementIdsFor(progress))
+      }
       set({
         selectedIso: hit.iso,
         lastHit: hit,
         lastCountryName: name,
         progress,
+        displayXp: progress.xp,
         flyTo: hit.iso ? { lat: hit.lat, lng: hit.lng, dist: 3.85 } : st.flyTo,
+        toast: isNewCountry ? { text: t().play.openedCountry, kind: "ok" } : st.toast,
+        highlightIso: hit.iso,
+        rewardPulse: isNewCountry ? 15 : 0,
       })
+      void persist(progress)
       return
     }
 
@@ -335,8 +436,30 @@ export const useGame = create<GameState>((set, get) => ({
       }
       const pins =
         useFlag && hit.iso && !st.flagPins.includes(hit.iso) ? [...st.flagPins, hit.iso] : st.flagPins
-      let scored = { ...progress, xp: progress.xp + reward, coins: progress.coins + 20 }
-      if (scored.xp >= 500) scored = grant(scored, "xp-500")
+      const playStreak = progress.playStreak + 1
+      const streakBonus = Math.min(40, Math.max(0, (playStreak - 1) * 6))
+      const openBonus = isNewCountry ? 25 : 0
+      const diffBonus = progress.difficulty === "hard" ? 15 : progress.difficulty === "easy" ? 0 : 8
+      const gained = reward + streakBonus + openBonus + diffBonus
+      const beforeLevel = playerLevel(progress.xp)
+      let scored: Progress = {
+        ...progress,
+        xp: progress.xp + gained,
+        coins: progress.coins + 20 + (isNewCountry ? 10 : 0),
+        playStreak,
+        bestPlayStreak: Math.max(progress.bestPlayStreak, playStreak),
+      }
+      if (useDaily && st.activeDailyId) {
+        const dailyTasks = scored.dailyTasks.map((task) => (task.id === st.activeDailyId ? { ...task, done: true } : task))
+        const dailyComplete = dailyTasks.every((task) => task.done)
+        scored = { ...scored, dailyTasks, dailyComplete, xp: scored.xp + (dailyComplete && !progress.dailyComplete ? 80 : 0) }
+      }
+      const freshAch = achievementIdsFor(scored).filter((id) => !scored.achievements.includes(id))
+      scored = grantMany(scored, achievementIdsFor(scored))
+      if (freshAch.length) audio.play("achievement")
+      if (isNewCountry) audio.play("unlock")
+      if (playerLevel(scored.xp) > beforeLevel) audio.play("transition")
+      const toastText = isNewCountry ? t().play.openedCountry : t().play.correctLocation
       set({
         selectedIso: hit.iso,
         highlightIso: hit.iso,
@@ -350,7 +473,11 @@ export const useGame = create<GameState>((set, get) => ({
         flagPins: pins,
         screenFlash: null,
         flagMoment: useFlag ? "win" : get().flagMoment,
-        lastFeedback: { ok: true, text: t().play.correctLocation },
+        lastFeedback: { ok: true, text: toastText },
+        flyTo: hit.iso ? { lat: hit.lat, lng: hit.lng, dist: 3.15 } : st.flyTo,
+        toast: { text: toastText, kind: freshAch.length ? "ach" : "ok" },
+        rewardPulse: gained,
+        activeDailyId: useDaily && scored.dailyTasks.find((task) => task.id === st.activeDailyId)?.done ? null : st.activeDailyId,
       })
       for (let i = 0; i < 6; i += 1) window.setTimeout(() => audio.play("xp"), 80 * i)
       void persist(scored)
@@ -365,14 +492,12 @@ export const useGame = create<GameState>((set, get) => ({
       if (useFlag) audio.play("ambient")
       const hint = useFlag ? t().play.flagWrong : useCampaign ? st.campaign!.hint : st.mission?.hint || t().play.tryElsewhere
       const miss = st.roundRules?.missPenalty ?? 0
-      const penalized =
-        miss > 0
-          ? {
-              ...progress,
-              xp: Math.max(0, progress.xp - miss),
-              coins: Math.max(0, progress.coins - miss),
-            }
-          : progress
+      const penalized = {
+        ...progress,
+        playStreak: 0,
+        xp: miss > 0 ? Math.max(0, progress.xp - miss) : progress.xp,
+        coins: miss > 0 ? Math.max(0, progress.coins - miss) : progress.coins,
+      }
       set({
         selectedIso: hit.iso,
         lastHit: hit,
@@ -386,7 +511,7 @@ export const useGame = create<GameState>((set, get) => ({
         flagMoment: useFlag ? "lose" : get().flagMoment,
         lastFeedback: { ok: false, text: hint },
       })
-      if (penalized !== progress) void persist(penalized)
+      void persist(penalized)
       if (useFlag) {
         window.setTimeout(() => {
           if (get().screenFlash === "red") set({ screenFlash: null })
@@ -421,20 +546,24 @@ export const useGame = create<GameState>((set, get) => ({
     window.clearTimeout(pulseTimer)
     const rules = rulesFor(get().progress.difficulty, "mission")
     const flagLike = mission.kind === "flag" || mission.kind === "capital" || mission.kind === "neighbors" || mission.kind === "shape"
+    const daily = mission.id.startsWith("daily-")
+    audio.play("transition")
     set({
       mission,
-      campaign: flagLike ? null : get().campaign,
+      campaign: flagLike || daily ? null : get().campaign,
       campaignPhase: "play",
       missionEndsAt: Date.now() + mission.timeMs * rules.timerMul,
       lastFeedback: null,
       flagMoment: null,
       lastPenalty: 0,
-      highlightIso: flagLike ? null : (mission.targetIso ?? null),
+      highlightIso: flagLike || daily ? null : (mission.targetIso ?? null),
       stage: flagLike ? "flag" : "mission",
       roundRules: rules,
       ...HINT_RESET,
       layers: { ...get().layers, borders: rules.showBorders },
-      flyTo: flagLike
+      activeDailyId: daily ? mission.id : null,
+      toast: null,
+      flyTo: flagLike || daily
         ? { lat: 22, lng: 18, dist: 6.6 }
         : mission.lat != null
           ? { lat: mission.lat, lng: mission.lng ?? 0, dist: 5.4 }
@@ -596,6 +725,46 @@ export const useGame = create<GameState>((set, get) => ({
     audio.setMusicVol(p.musicVol)
     audio.setSfxVol(p.sfxVol)
   },
+
+  openDaily: () => {
+    const progress = touchLogin(get().progress)
+    audio.play("transition")
+    set({
+      stage: "daily",
+      progress,
+      campaign: null,
+      mission: null,
+      missionEndsAt: null,
+      lastFeedback: null,
+      activeDailyId: null,
+      flyTo: { lat: 20, lng: 24, dist: 6.4 },
+    })
+    void persist(progress)
+  },
+
+  playDailyTask: (id) => {
+    const progress = ensureDaily(get().progress)
+    const task = progress.dailyTasks.find((item) => item.id === id)
+    if (!task || task.done) {
+      set({ progress })
+      return
+    }
+    const mission = dailyToMission(task)
+    set({ progress })
+    get().startMission(mission)
+  },
+
+  reseedDaily: () => {
+    const countries = getCatalog()?.countries ?? []
+    if (countries.length < 12) return
+    const current = get().progress
+    const keep = current.dailyDate === todayKey() && current.dailyTasks.length >= 12
+    const progress = keep ? current : ensureDaily({ ...current, dailyTasks: [] })
+    set({ progress })
+    void persist(progress)
+  },
+
+  clearToast: () => set({ toast: null, rewardPulse: 0 }),
 
   startCampaign: (index) => {
     window.clearTimeout(pulseTimer)

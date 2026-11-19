@@ -20,8 +20,9 @@ import { useGame } from "../store/gameStore"
 import type { NamedLine } from "../geo/catalog"
 import { isoOf, type Place } from "../geo/catalog"
 import { EARTH_R, cameraFor, geometryFromGeoJSON, latLngToVec } from "./geo"
+import { CountryFlags } from "./CountryFlags"
 import { FlagPins } from "./FlagPins"
-import { GlobePick } from "./GlobePick"
+import { GlobePick, type GlobeHover } from "./GlobePick"
 
 export type Layers = {
   relief: boolean
@@ -44,7 +45,7 @@ type Props = {
   flyTo: { lat: number; lng: number; dist: number } | null
   lod: number
   onPick: (hit: { iso: string | null; lat: number; lng: number }) => void
-  onHover?: (hit: { iso: string | null; name: string | null; x: number; y: number } | null) => void
+  onHover?: (hit: GlobeHover | null) => void
 }
 
 function ClimateShell({ on }: { on: boolean }) {
@@ -153,10 +154,11 @@ export function EarthScene({
   const stage = useGame((s) => s.stage)
   const campaign = useGame((s) => s.campaign)
   const flagPins = useGame((s) => s.flagPins)
-  const missionMode = (stage === "mission" || Boolean(campaign)) && stage !== "flag"
+  const flagHunt = stage === "flag"
+  const missionMode = (stage === "mission" || Boolean(campaign)) && !flagHunt
   const pulseIsos = useGame((s) => s.pulseIsos)
   const pulseCenter = useGame((s) => s.pulseCenter)
-  const strongBorders = layers.borders
+  const strongBorders = missionMode || layers.borders || flagHunt
   const earth = useRef<Group>(null)
   const globeMesh = useRef<Mesh>(null)
   const fly = useRef(0)
@@ -320,7 +322,7 @@ export function EarthScene({
       ) : null}
       {selectedGeo ? (
         <lineSegments geometry={selectedGeo} raycast={() => undefined}>
-          <lineBasicMaterial ref={outlineMat} color="#5ee7ff" transparent opacity={0.98} />
+          <lineBasicMaterial ref={outlineMat} color="#5ee7ff" transparent opacity={0.98} linewidth={2} />
         </lineSegments>
       ) : null}
       {pulseGeo ? (
@@ -335,6 +337,7 @@ export function EarthScene({
       ) : null}
       {pulseCenter ? <PulseBeacon lat={pulseCenter.lat} lng={pulseCenter.lng} /> : null}
       <FlagPins isos={flagPins} />
+      <CountryFlags />
       </group>
       <OrbitControls
         makeDefault

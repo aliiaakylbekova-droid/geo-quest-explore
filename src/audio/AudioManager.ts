@@ -5,9 +5,12 @@ type Sfx =
   | "zoom"
   | "discovery"
   | "success"
+  | "correct"
   | "fail"
+  | "wrong"
   | "xp"
   | "unlock"
+  | "achievement"
   | "transition"
   | "missionComplete"
   | "timeout"
@@ -23,6 +26,14 @@ class AudioManager {
   private ambientNodes: OscillatorNode[] = []
   private ambientSources: AudioBufferSourceNode[] = []
   private ambientGain: GainNode | null = null
+  private pianoSrc: AudioBufferSourceNode | null = null
+  private pianoGain: GainNode | null = null
+  private pianoBuffer: AudioBuffer | null = null
+  private pianoLoading: Promise<AudioBuffer | null> | null = null
+  private pianoWanted = false
+  private padGain: GainNode | null = null
+  private padNodes: OscillatorNode[] = []
+  private padSources: AudioBufferSourceNode[] = []
   unlocked = false
   musicOn = true
   sfxOn = true
@@ -92,6 +103,9 @@ class AudioManager {
       this.startAmbient()
       return
     }
+    const duck =
+      name === "tick" || name === "tickWarn" || name === "xp" || name === "startClick" ? 0 : name === "timeout" || name === "gameOver" ? 0.9 : 0.42
+    if (duck) this.duck(duck)
     if (name === "startClick") this.ping(880, 0.045, 0.035, "sine")
     else if (name === "start") {
       this.ping(196, 0.42, 0.05, "sine")
@@ -99,11 +113,11 @@ class AudioManager {
     }
     else if (name === "zoom") this.sweep(90, 160, 0.35, 0.03, "sine")
     else if (name === "discovery") this.ping(523, 0.16, 0.05, "sine")
-    else if (name === "success") {
+    else if (name === "success" || name === "correct") {
       this.ping(659, 0.14, 0.2, "sine")
       window.setTimeout(() => this.ping(988, 0.2, 0.16, "sine"), 45)
     }
-    else if (name === "fail") {
+    else if (name === "fail" || name === "wrong") {
       this.ping(196, 0.12, 0.2, "triangle")
       window.setTimeout(() => this.ping(131, 0.2, 0.18, "sine"), 40)
     }
@@ -122,12 +136,29 @@ class AudioManager {
       window.setTimeout(() => this.ping(73, 1.1, 0.07, "triangle"), 280)
     }
     else if (name === "xp") this.ping(740, 0.05, 0.04, "sine")
-    else if (name === "unlock") this.ping(523, 0.18, 0.06, "sine")
+    else if (name === "unlock") {
+      this.ping(523, 0.18, 0.06, "sine")
+      window.setTimeout(() => this.ping(659, 0.16, 0.05, "sine"), 90)
+    }
+    else if (name === "achievement") {
+      this.ping(523, 0.16, 0.07, "sine")
+      window.setTimeout(() => this.ping(659, 0.18, 0.06, "sine"), 80)
+      window.setTimeout(() => this.ping(784, 0.28, 0.07, "triangle"), 170)
+    }
     else if (name === "transition") this.sweep(120, 180, 0.4, 0.03, "sine")
     else if (name === "missionComplete") {
       this.ping(392, 0.28, 0.08, "sine")
       window.setTimeout(() => this.ping(523, 0.35, 0.07, "sine"), 160)
     }
+  }
+
+  private duck(seconds: number) {
+    if (!this.ctx || !this.musicBus || !this.musicOn) return
+    const t = this.ctx.currentTime
+    const vol = Math.max(0.0001, this.musicVol)
+    this.musicBus.gain.cancelScheduledValues(t)
+    this.musicBus.gain.setValueAtTime(vol * 0.22, t)
+    this.musicBus.gain.exponentialRampToValueAtTime(vol, t + Math.max(0.18, seconds))
   }
 
   private ping(freq: number, dur: number, vol: number, type: OscillatorType) {
@@ -177,8 +208,108 @@ class AudioManager {
 
   startAmbient() {
     if (!this.unlocked || !this.musicOn) return
+    this.pianoWanted = true
+    if (this.pianoGain || this.ambientGain) return
+    void this.startPianoLoop()
+  }
+
+  private loadPiano() {
+    if (this.pianoBuffer) return Promise.resolve(this.pianoBuffer)
+    if (this.pianoLoading) return this.pianoLoading
     const ctx = this.ensure()
-    if (this.ambientGain) return
+    this.pianoLoading = (async () => {
+      try {
+        const url = `${import.meta.env.BASE_URL}audio/piano-nocturne-loop.wav`
+        const res = await fetch(url)
+        if (!res.ok) return null
+        const raw = await res.arrayBuffer()
+        this.pianoBuffer = await ctx.decodeAudioData(raw.slice(0))
+        return this.pianoBuffer
+      } catch {
+        return null
+      }
+    })()
+    return this.pianoLoading
+  }
+
+  private async startPianoLoop() {
+    const ctx = this.ensure()
+    const buf = await this.loadPiano()
+    if (!this.pianoWanted || !this.unlocked || !this.musicOn) return
+    if (this.pianoGain || this.ambientGain) return
+    if (!buf) {
+      this.startPadFallback()
+      return
+    }
+    const g = ctx.createGain()
+    g.gain.value = 0.0001
+    g.connect(this.musicBus!)
+    const src = ctx.createBufferSource()
+    src.buffer = buf
+    src.loop = true
+    src.connect(g)
+    src.start()
+    g.gain.exponentialRampToValueAtTime(0.26, ctx.currentTime + 1.6)
+    this.pianoGain = g
+    this.pianoSrc = src
+    this.startCinematicPads(0.028)
+  }
+
+  private startCinematicPads(level: number) {
+    if (!this.unlocked || !this.musicOn || this.padGain) return
+    const ctx = this.ensure()
+    const g = ctx.createGain()
+    g.gain.value = 0.0001
+    g.connect(this.musicBus!)
+    const pads = [
+      { f: 49, type: "sine" as OscillatorType },
+      { f: 73.4, type: "sine" as OscillatorType },
+      { f: 98, type: "triangle" as OscillatorType },
+      { f: 196, type: "sine" as OscillatorType },
+    ]
+    this.padNodes = pads.map((pad) => {
+      const osc = ctx.createOscillator()
+      osc.type = pad.type
+      osc.frequency.value = pad.f
+      const filt = ctx.createBiquadFilter()
+      filt.type = "lowpass"
+      filt.frequency.value = 380
+      filt.Q.value = 0.35
+      osc.connect(filt)
+      filt.connect(g)
+      osc.start()
+      return osc
+    })
+    const lfo = ctx.createOscillator()
+    lfo.type = "sine"
+    lfo.frequency.value = 0.04
+    const lfoGain = ctx.createGain()
+    lfoGain.gain.value = 0.008
+    lfo.connect(lfoGain)
+    lfoGain.connect(g.gain)
+    lfo.start()
+    this.padNodes.push(lfo)
+    const noise = ctx.createBufferSource()
+    noise.buffer = this.noiseBuffer(ctx)
+    noise.loop = true
+    const noiseFilt = ctx.createBiquadFilter()
+    noiseFilt.type = "lowpass"
+    noiseFilt.frequency.value = 220
+    const noiseGain = ctx.createGain()
+    noiseGain.gain.value = 0.012
+    noise.connect(noiseFilt)
+    noiseFilt.connect(noiseGain)
+    noiseGain.connect(g)
+    noise.start()
+    this.padSources = [noise]
+    g.gain.exponentialRampToValueAtTime(level, ctx.currentTime + 2.2)
+    this.padGain = g
+  }
+
+  private startPadFallback() {
+    if (!this.unlocked || !this.musicOn) return
+    const ctx = this.ensure()
+    if (this.ambientGain || this.pianoGain) return
     const g = ctx.createGain()
     g.gain.value = 0.0001
     g.connect(this.musicBus!)
@@ -232,7 +363,25 @@ class AudioManager {
   }
 
   stopAmbient() {
+    this.pianoWanted = false
     const ctx = this.ctx
+    if (this.pianoSrc) {
+      try {
+        this.pianoSrc.stop()
+      } catch {
+        /* already stopped */
+      }
+      this.pianoSrc = null
+    }
+    if (this.pianoGain && ctx) {
+      try {
+        this.pianoGain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.4)
+      } catch {
+        /* closed */
+      }
+      this.pianoGain.disconnect()
+      this.pianoGain = null
+    }
     this.ambientSources.forEach((s) => {
       try {
         s.stop()
@@ -253,6 +402,31 @@ class AudioManager {
     })
     this.ambientNodes = []
     this.ambientGain = null
+    this.padSources.forEach((s) => {
+      try {
+        s.stop()
+      } catch {
+        /* already stopped */
+      }
+    })
+    this.padSources = []
+    this.padNodes.forEach((o) => {
+      try {
+        o.stop()
+      } catch {
+        /* already stopped */
+      }
+    })
+    this.padNodes = []
+    if (this.padGain && ctx) {
+      try {
+        this.padGain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5)
+      } catch {
+        /* closed */
+      }
+      this.padGain.disconnect()
+      this.padGain = null
+    }
   }
 }
 

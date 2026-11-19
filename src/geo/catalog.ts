@@ -193,8 +193,13 @@ export async function loadHiResCountries() {
 
 export function isoOf(feature: GeoJSON.Feature) {
   const p = feature.properties || {}
-  const raw = p.ISO_A2 !== "-99" ? p.ISO_A2 : p.ISO_A2_EH
-  return String(raw || p.ADM0_A3 || "").toUpperCase()
+  const candidates = [p.ISO_A2, p.ISO_A2_EH, p.WB_A2]
+  for (const raw of candidates) {
+    const iso = String(raw || "").toUpperCase()
+    if (iso && iso !== "-99" && iso.length === 2) return iso
+    if (iso === "CN-TW") return "TW"
+  }
+  return String(p.ADM0_A3 || "").toUpperCase()
 }
 
 export function pickCountry(lng: number, lat: number, features: GeoJSON.Feature[]) {
@@ -215,6 +220,19 @@ export function pickNearestNamed(items: NamedLine[], lat: number, lng: number, m
     }
   }
   return best
+}
+
+export function capitalForIso(iso: string | null): { name: string; lat: number; lng: number } | null {
+  if (!iso) return null
+  const rec = catalog?.byIso.get(iso) ?? (seedCountries.find((c) => c.iso === iso) as CountryRecord | undefined)
+  const name = rec?.capital?.trim()
+  if (!name || name === "—") return null
+  const cities = catalog?.cities ?? []
+  const primary = cities.find((c) => c.iso === iso && c.kind === "Admin-0 capital")
+  const named = cities.find((c) => c.iso === iso && (c.name === name || c.nameEn === name))
+  const anyCap = cities.find((c) => c.iso === iso && c.kind.toLowerCase().includes("capital") && !c.kind.toLowerCase().includes("alt"))
+  const city = primary ?? named ?? anyCap
+  return { name, lat: city?.lat ?? rec!.lat, lng: city?.lng ?? rec!.lng }
 }
 
 export const NEIGHBORS: Record<string, string[]> = {

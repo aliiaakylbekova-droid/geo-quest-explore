@@ -58,6 +58,12 @@ export function evaluateLevel(level: CampaignLevel, hit: { iso: string | null; l
 }
 
 export function evaluateMission(mission: StoryMission, hit: { iso: string | null; lat: number; lng: number }) {
+  if (mission.id.startsWith("daily-") && mission.kind === "continent") {
+    return continentOf(hit.iso) === mission.continent
+  }
+  if (mission.id.startsWith("daily-") && mission.targetIso) {
+    return hit.iso === mission.targetIso
+  }
   if (mission.kind === "river" || mission.kind === "mountain" || mission.kind === "city" || mission.kind === "coords") {
     return geoDist2(mission.lat ?? 0, mission.lng ?? 0, hit.lat, hit.lng) < (mission.kind === "coords" ? 64 : 36)
   }

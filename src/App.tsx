@@ -48,6 +48,8 @@ export default function App() {
       roundRules: () => useGame.getState().roundRules,
       xp: () => useGame.getState().progress.xp,
       award: (xp = 0, coins = 0) => useGame.getState().award(xp, coins),
+      daily: () => useGame.getState().openDaily(),
+      toast: () => useGame.getState().toast?.text ?? null,
     }
   }, [])
 

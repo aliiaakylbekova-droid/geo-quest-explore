@@ -31,6 +31,15 @@ function progressRow(userId: string, progress: Progress) {
     locale: progress.locale,
     campaign_index: progress.campaignIndex,
     campaign_done: progress.campaignDone,
+    login_streak: progress.loginStreak,
+    best_login_streak: progress.bestLoginStreak,
+    last_login_date: progress.lastLoginDate,
+    login_dates: progress.loginDates,
+    play_streak: progress.playStreak,
+    best_play_streak: progress.bestPlayStreak,
+    daily_date: progress.dailyDate,
+    daily_tasks: progress.dailyTasks,
+    daily_complete: progress.dailyComplete,
     updated_at: new Date().toISOString(),
   }
 }
@@ -53,6 +62,15 @@ function progressFromRow(row: Record<string, unknown>): Progress {
     locale: row.locale === "en" ? "en" : "ru",
     campaignIndex: Number(row.campaign_index) || 0,
     campaignDone: Array.isArray(row.campaign_done) ? (row.campaign_done as string[]) : [],
+    loginStreak: Number(row.login_streak) || 0,
+    bestLoginStreak: Number(row.best_login_streak) || 0,
+    lastLoginDate: String(row.last_login_date || ""),
+    loginDates: Array.isArray(row.login_dates) ? (row.login_dates as string[]) : [],
+    playStreak: Number(row.play_streak) || 0,
+    bestPlayStreak: Number(row.best_play_streak) || 0,
+    dailyDate: String(row.daily_date || ""),
+    dailyTasks: Array.isArray(row.daily_tasks) ? (row.daily_tasks as Progress["dailyTasks"]) : [],
+    dailyComplete: Boolean(row.daily_complete),
   }
 }
 
