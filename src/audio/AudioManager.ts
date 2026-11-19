@@ -12,6 +12,7 @@ type Sfx =
   | "unlock"
   | "achievement"
   | "transition"
+  | "next"
   | "missionComplete"
   | "timeout"
   | "gameOver"
@@ -114,12 +115,15 @@ class AudioManager {
     else if (name === "zoom") this.sweep(90, 160, 0.35, 0.03, "sine")
     else if (name === "discovery") this.ping(523, 0.16, 0.05, "sine")
     else if (name === "success" || name === "correct") {
-      this.ping(659, 0.14, 0.2, "sine")
-      window.setTimeout(() => this.ping(988, 0.2, 0.16, "sine"), 45)
+      this.ping(523.25, 0.09, 0.14, "sine")
+      window.setTimeout(() => this.ping(659.25, 0.1, 0.16, "sine"), 70)
+      window.setTimeout(() => this.ping(783.99, 0.12, 0.18, "triangle"), 140)
+      window.setTimeout(() => this.ping(1046.5, 0.22, 0.14, "sine"), 210)
     }
     else if (name === "fail" || name === "wrong") {
-      this.ping(196, 0.12, 0.2, "triangle")
-      window.setTimeout(() => this.ping(131, 0.2, 0.18, "sine"), 40)
+      this.ping(311.13, 0.1, 0.16, "triangle")
+      window.setTimeout(() => this.ping(233.08, 0.14, 0.18, "sine"), 70)
+      window.setTimeout(() => this.ping(174.61, 0.22, 0.16, "sine"), 150)
     }
     else if (name === "tick") this.ping(980, 0.04, 0.022, "sine")
     else if (name === "tickWarn") {
@@ -141,14 +145,21 @@ class AudioManager {
       window.setTimeout(() => this.ping(659, 0.16, 0.05, "sine"), 90)
     }
     else if (name === "achievement") {
-      this.ping(523, 0.16, 0.07, "sine")
-      window.setTimeout(() => this.ping(659, 0.18, 0.06, "sine"), 80)
-      window.setTimeout(() => this.ping(784, 0.28, 0.07, "triangle"), 170)
+      this.ping(392, 0.12, 0.08, "sine")
+      window.setTimeout(() => this.ping(523.25, 0.14, 0.1, "sine"), 90)
+      window.setTimeout(() => this.ping(659.25, 0.16, 0.11, "triangle"), 180)
+      window.setTimeout(() => this.ping(783.99, 0.28, 0.13, "sine"), 280)
+      window.setTimeout(() => this.ping(1046.5, 0.35, 0.1, "sine"), 400)
     }
-    else if (name === "transition") this.sweep(120, 180, 0.4, 0.03, "sine")
+    else if (name === "transition" || name === "next") {
+      this.sweep(180, 420, 0.22, 0.045, "sine")
+      window.setTimeout(() => this.ping(880, 0.1, 0.06, "sine"), 160)
+    }
     else if (name === "missionComplete") {
-      this.ping(392, 0.28, 0.08, "sine")
-      window.setTimeout(() => this.ping(523, 0.35, 0.07, "sine"), 160)
+      this.ping(392, 0.2, 0.09, "sine")
+      window.setTimeout(() => this.ping(523.25, 0.22, 0.1, "sine"), 140)
+      window.setTimeout(() => this.ping(659.25, 0.28, 0.11, "triangle"), 280)
+      window.setTimeout(() => this.ping(783.99, 0.4, 0.12, "sine"), 430)
     }
   }
 

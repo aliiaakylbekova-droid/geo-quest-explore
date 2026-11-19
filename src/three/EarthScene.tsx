@@ -14,12 +14,13 @@ import {
   type LineBasicMaterial,
   type Mesh,
   type MeshStandardMaterial,
+  type Sprite,
   type Texture,
 } from "three"
 import { useGame } from "../store/gameStore"
 import type { NamedLine } from "../geo/catalog"
 import { isoOf, type Place } from "../geo/catalog"
-import { EARTH_R, cameraFor, geometryFromGeoJSON } from "./geo"
+import { EARTH_R, cameraFor, geometryFromGeoJSON, latLngToVec } from "./geo"
 import { CountryFlags } from "./CountryFlags"
 import { GlobePick, type GlobeHover } from "./GlobePick"
 
@@ -138,6 +139,41 @@ function ClimateShell({ on }: { on: boolean }) {
   )
 }
 
+function PulseBeacon({ lat, lng }: { lat: number; lng: number }) {
+  const sprite = useRef<Sprite>(null)
+  const pos = useMemo(() => latLngToVec(lat, lng, EARTH_R + 0.14), [lat, lng])
+  const tex = useMemo(() => {
+    const c = document.createElement("canvas")
+    c.width = 256
+    c.height = 256
+    const ctx = c.getContext("2d")
+    if (ctx) {
+      const g = ctx.createRadialGradient(128, 128, 12, 128, 128, 128)
+      g.addColorStop(0, "rgba(255, 248, 200, 0.95)")
+      g.addColorStop(0.28, "rgba(255, 210, 80, 0.75)")
+      g.addColorStop(0.62, "rgba(232, 197, 71, 0.35)")
+      g.addColorStop(1, "rgba(232, 197, 71, 0)")
+      ctx.fillStyle = g
+      ctx.fillRect(0, 0, 256, 256)
+    }
+    const t = new CanvasTexture(c)
+    t.colorSpace = SRGBColorSpace
+    return t
+  }, [])
+  useFrame(() => {
+    const k = 0.5 + 0.5 * Math.sin(performance.now() * 0.008)
+    if (sprite.current) {
+      const s = 1.35 + 0.55 * k
+      sprite.current.scale.set(s, s, 1)
+    }
+  })
+  return (
+    <sprite ref={sprite} position={pos} raycast={() => undefined}>
+      <spriteMaterial map={tex} transparent depthWrite={false} depthTest={false} blending={AdditiveBlending} />
+    </sprite>
+  )
+}
+
 function Atmosphere({ close }: { close: boolean }) {
   return (
     <mesh scale={close ? 1.018 : 1.045} raycast={() => undefined}>
@@ -181,6 +217,8 @@ export function EarthScene({
   const campaign = useGame((s) => s.campaign)
   const flagHunt = stage === "flag"
   const missionMode = (stage === "mission" || Boolean(campaign)) && !flagHunt
+  const pulseIsos = useGame((s) => s.pulseIsos)
+  const pulseCenter = useGame((s) => s.pulseCenter)
   void flagHunt
   const earth = useRef<Group>(null)
   const globeMesh = useRef<Mesh>(null)
@@ -197,6 +235,7 @@ export function EarthScene({
   const introDone = useRef(false)
   const outline = useRef(new Color("#5ee7ff"))
   const outlineMat = useRef<LineBasicMaterial>(null)
+  const pulseMat = useRef<LineBasicMaterial>(null)
   const closeRef = useRef(false)
   const [close, setClose] = useState(false)
   const sunDir = useMemo(() => new Vector3(7.4, 3.1, 5.2).normalize(), [])
@@ -241,6 +280,9 @@ export function EarthScene({
       hitTint === "gold" ? "#e8c547" : hitTint === "red" ? "#ff6a3d" : hitTint === "orange" ? "#ff9a4a" : "#5ee7ff"
     outline.current.lerp(new Color(want), 1 - Math.exp(-dt * 8))
     if (outlineMat.current) outlineMat.current.color.copy(outline.current)
+    if (pulseMat.current) {
+      pulseMat.current.opacity = 0.35 + 0.6 * (0.5 + 0.5 * Math.sin(performance.now() * 0.007))
+    }
 
     if (introPhase !== "ready") {
       introClock.current += dt
@@ -311,6 +353,13 @@ export function EarthScene({
     () => (selectedFeature ? geometryFromGeoJSON([selectedFeature], EARTH_R + 0.011) : null),
     [selectedFeature],
   )
+  const pulseKey = pulseIsos.join(",")
+  const pulseGeo = useMemo(() => {
+    if (!pulseKey) return null
+    const want = new Set(pulseKey.split(",").filter(Boolean))
+    const feats = features.filter((f) => want.has(isoOf(f)))
+    return feats.length ? geometryFromGeoJSON(feats, EARTH_R + 0.014) : null
+  }, [features, pulseKey])
 
   const playing = introPhase === "ready" && campaignPhase !== "transition" && campaignPhase !== "correct" && campaignPhase !== "success"
 
@@ -389,10 +438,26 @@ export function EarthScene({
         </>
       ) : null}
       {selectedGeo ? (
-        <lineSegments geometry={selectedGeo} raycast={() => undefined}>
-          <lineBasicMaterial ref={outlineMat} color="#5ee7ff" transparent opacity={0.98} linewidth={2} />
-        </lineSegments>
+        <group>
+          <lineSegments geometry={selectedGeo} raycast={() => undefined}>
+            <lineBasicMaterial ref={outlineMat} color="#5ee7ff" transparent opacity={0.98} linewidth={2} />
+          </lineSegments>
+          <lineSegments geometry={selectedGeo} raycast={() => undefined} scale={1.006}>
+            <lineBasicMaterial color="#fff8d0" transparent opacity={0.85} />
+          </lineSegments>
+        </group>
       ) : null}
+      {pulseGeo ? (
+        <group>
+          <lineSegments geometry={pulseGeo} raycast={() => undefined} scale={1.006}>
+            <lineBasicMaterial color="#7a5a10" transparent opacity={0.95} />
+          </lineSegments>
+          <lineSegments geometry={pulseGeo} raycast={() => undefined} scale={1.012}>
+            <lineBasicMaterial ref={pulseMat} color="#ffe38a" transparent opacity={0.9} />
+          </lineSegments>
+        </group>
+      ) : null}
+      {pulseCenter ? <PulseBeacon lat={pulseCenter.lat} lng={pulseCenter.lng} /> : null}
       <CountryFlags />
       </group>
       <OrbitControls

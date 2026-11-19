@@ -13,6 +13,7 @@ import {
   type PuzzlePiece,
 } from "../data/puzzle"
 import { getCatalog, loadCatalog } from "../geo/catalog"
+import { audio } from "../audio/AudioManager"
 import { t } from "../i18n"
 import { useGame } from "../store/gameStore"
 import { formatClock } from "./logic"
@@ -133,10 +134,12 @@ export function MapPuzzle() {
       const dy = drag.y - piece.cy
       if (dx * dx + dy * dy <= SNAP * SNAP) {
         setPlaced((prev) => (prev.includes(drag.iso) ? prev : [...prev, drag.iso]))
+        audio.play("discovery")
         setDrag(null)
         return
       }
     }
+    audio.play("fail")
     setDrag(null)
   }
 
@@ -186,20 +189,32 @@ export function MapPuzzle() {
       </div>
       <svg
         ref={svgRef}
-        className="gq-puzzle-map"
+        className="gq-puzzle-map is-atlas"
         viewBox={`0 0 ${PUZZLE_SIZE.w} ${PUZZLE_SIZE.h}`}
         role="img"
         aria-label={ui.puzzle}
       >
-        <rect x="0" y="0" width={PUZZLE_SIZE.w} height={PUZZLE_SIZE.h} fill="rgba(8,18,28,0.55)" />
+        <defs>
+          <filter id="atlas-shadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="1.6" stdDeviation="1.4" floodColor="#3a4a58" floodOpacity="0.28" />
+          </filter>
+        </defs>
+        <rect x="0" y="0" width={PUZZLE_SIZE.w} height={PUZZLE_SIZE.h} fill="#d7ebf4" />
         {ghosts.map((g) => (
-          <path key={`g-${g.iso}`} d={g.d} fill="rgba(180,210,220,0.08)" stroke="rgba(244,247,251,0.28)" strokeWidth="1.1" />
+          <path key={`g-${g.iso}`} d={g.d} fill="#e7f1ea" stroke="#b7c9c4" strokeWidth="0.8" />
         ))}
         {pieces.map((p) =>
           placed.includes(p.iso) ? (
-            <path key={`ok-${p.iso}`} d={p.d} fill="rgba(94,231,255,0.42)" stroke="#5ee7ff" strokeWidth="1.6" />
+            <path
+              key={`ok-${p.iso}`}
+              d={p.d}
+              fill={p.color}
+              stroke="#5a6570"
+              strokeWidth="1.05"
+              filter="url(#atlas-shadow)"
+            />
           ) : (
-            <path key={`slot-${p.iso}`} d={p.d} fill="rgba(232,197,71,0.05)" stroke="rgba(232,197,71,0.35)" strokeWidth="1.2" strokeDasharray="5 4" />
+            <path key={`slot-${p.iso}`} d={p.d} fill="#f4f7f2" stroke="#9aab9e" strokeWidth="1" strokeDasharray="4 3" />
           ),
         )}
         {drag
@@ -208,7 +223,17 @@ export function MapPuzzle() {
               if (!p) return null
               const dx = drag.x - p.cx
               const dy = drag.y - p.cy
-              return <path d={p.d} transform={`translate(${dx} ${dy})`} fill="rgba(94,231,255,0.55)" stroke="#fff" strokeWidth="1.8" />
+              return (
+                <path
+                  d={p.d}
+                  transform={`translate(${dx} ${dy})`}
+                  fill={p.color}
+                  stroke="#3d4650"
+                  strokeWidth="1.6"
+                  filter="url(#atlas-shadow)"
+                  opacity="0.92"
+                />
+              )
             })()
           : null}
       </svg>
@@ -220,11 +245,12 @@ export function MapPuzzle() {
             <button
               key={iso}
               type="button"
-              className="gq-piece"
+              className="gq-piece is-atlas"
+              style={{ ["--piece" as string]: p.color }}
               onPointerDown={(e) => onDown(iso, e)}
             >
               <svg viewBox={`${p.cx - 70} ${p.cy - 50} 140 100`}>
-                <path d={p.d} fill="#5ee7ff" stroke="#071018" strokeWidth="1.4" />
+                <path d={p.d} fill={p.color} stroke="#4a5560" strokeWidth="1.2" />
               </svg>
               <span>{p.name}</span>
             </button>

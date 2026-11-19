@@ -1,5 +1,16 @@
-import { isoOf, type CountryRecord } from "../geo/catalog"
+import { isoOf, NEIGHBORS, type CountryRecord } from "../geo/catalog"
 import { LEARNING_CONTINENTS, type LearningContinent } from "./continents"
+
+export const ATLAS_PALETTE = [
+  "#e07a6a",
+  "#8fd9b6",
+  "#c5b4e8",
+  "#f0d56a",
+  "#f08a4a",
+  "#4ec5c1",
+  "#e8a0c0",
+  "#9dcc7a",
+] as const
 
 export type PuzzleDiff = "easy" | "medium" | "hard"
 
@@ -101,6 +112,58 @@ export type PuzzlePiece = {
   d: string
   cx: number
   cy: number
+  color: string
+  x0: number
+  y0: number
+  x1: number
+  y1: number
+}
+
+function hashIso(iso: string) {
+  let n = 0
+  for (let i = 0; i < iso.length; i += 1) n = (n * 33 + iso.charCodeAt(i)) >>> 0
+  return n
+}
+
+function boxesTouch(a: PuzzlePiece, b: PuzzlePiece) {
+  const pad = 10
+  return !(a.x1 + pad < b.x0 || b.x1 + pad < a.x0 || a.y1 + pad < b.y0 || b.y1 + pad < a.y0)
+}
+
+export function colorAtlas(pieces: PuzzlePiece[]): PuzzlePiece[] {
+  const byIso = new Map(pieces.map((p) => [p.iso, p]))
+  const graph = new Map<string, Set<string>>()
+  for (const p of pieces) graph.set(p.iso, new Set())
+  for (const p of pieces) {
+    for (const n of NEIGHBORS[p.iso] ?? []) {
+      if (byIso.has(n)) graph.get(p.iso)!.add(n)
+    }
+  }
+  for (let i = 0; i < pieces.length; i += 1) {
+    for (let j = i + 1; j < pieces.length; j += 1) {
+      const a = pieces[i]
+      const b = pieces[j]
+      if (!boxesTouch(a, b)) continue
+      graph.get(a.iso)!.add(b.iso)
+      graph.get(b.iso)!.add(a.iso)
+    }
+  }
+  const order = [...pieces].sort((a, b) => (graph.get(b.iso)?.size ?? 0) - (graph.get(a.iso)?.size ?? 0))
+  const chosen = new Map<string, string>()
+  for (const p of order) {
+    const used = new Set([...graph.get(p.iso)!].map((iso) => chosen.get(iso)).filter(Boolean) as string[])
+    const start = hashIso(p.iso) % ATLAS_PALETTE.length
+    let color = ATLAS_PALETTE[start]
+    for (let k = 0; k < ATLAS_PALETTE.length; k += 1) {
+      const cand = ATLAS_PALETTE[(start + k) % ATLAS_PALETTE.length]
+      if (!used.has(cand)) {
+        color = cand
+        break
+      }
+    }
+    chosen.set(p.iso, color)
+  }
+  return pieces.map((p) => ({ ...p, color: chosen.get(p.iso) ?? p.color }))
 }
 
 export function piecesFromFeatures(
@@ -123,21 +186,30 @@ export function piecesFromFeatures(
       d: built.d,
       cx: built.cx,
       cy: built.cy,
+      color: ATLAS_PALETTE[hashIso(iso) % ATLAS_PALETTE.length],
+      x0: built.x0,
+      y0: built.y0,
+      x1: built.x1,
+      y1: built.y1,
     })
   }
-  return out
+  return colorAtlas(out)
 }
 
 function pathFromFeature(feature: GeoJSON.Feature, box: PuzzleBounds) {
   const geom = feature.geometry
   if (!geom || (geom.type !== "Polygon" && geom.type !== "MultiPolygon")) {
-    return { d: "", cx: 0, cy: 0, n: 0 }
+    return { d: "", cx: 0, cy: 0, n: 0, x0: 0, y0: 0, x1: 0, y1: 0 }
   }
   const polygons = geom.type === "Polygon" ? [geom.coordinates] : geom.coordinates
   let d = ""
   let sx = 0
   let sy = 0
   let n = 0
+  let x0 = Infinity
+  let y0 = Infinity
+  let x1 = -Infinity
+  let y1 = -Infinity
   for (const poly of polygons) {
     const ring = unwrapRing((poly[0] || []) as number[][])
     if (ring.length < 3) continue
@@ -150,8 +222,12 @@ function pathFromFeature(feature: GeoJSON.Feature, box: PuzzleBounds) {
       sx += p.x
       sy += p.y
       n += 1
+      x0 = Math.min(x0, p.x)
+      y0 = Math.min(y0, p.y)
+      x1 = Math.max(x1, p.x)
+      y1 = Math.max(y1, p.y)
     })
     d += "Z"
   }
-  return { d, cx: n ? sx / n : 0, cy: n ? sy / n : 0, n }
+  return { d, cx: n ? sx / n : 0, cy: n ? sy / n : 0, n, x0: Number.isFinite(x0) ? x0 : 0, y0: Number.isFinite(y0) ? y0 : 0, x1: Number.isFinite(x1) ? x1 : 0, y1: Number.isFinite(y1) ? y1 : 0 }
 }

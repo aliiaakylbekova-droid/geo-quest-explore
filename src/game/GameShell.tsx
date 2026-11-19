@@ -9,6 +9,9 @@ import { CONTINENTS, shiftDate, todayKey } from "../data/daily"
 import { LANDMARKS, NEIGHBORS, getCatalog, loadCatalog } from "../geo/catalog"
 import { formatClock } from "./logic"
 import { CampaignOverlay } from "./CampaignOverlay"
+import { DifficultyDock } from "./DifficultyDock"
+import { filterCountryPool } from "./difficulty"
+import { HintLadder } from "./MissionHints"
 import { LearningHub } from "./LearningHub"
 import { MapPuzzle } from "./MapPuzzle"
 import { t } from "../i18n"
@@ -91,8 +94,8 @@ export function GameShell() {
   const playDailyTask = useGame((s) => s.playDailyTask)
   const openPuzzle = useGame((s) => s.openPuzzle)
   const clearToast = useGame((s) => s.clearToast)
-  const hideNames = stage === "mission"
-  const [hintOn, setHintOn] = useState(false)
+  const roundRules = useGame((s) => s.roundRules)
+  const hideNames = (stage === "mission" || Boolean(campaign)) && Boolean(roundRules) && !roundRules.showNames
   const [point, setPoint] = useState<{ title: string; text: string } | null>(null)
   const [flagRound, setFlagRound] = useState<StoryMission | null>(null)
   const [hoverTip, setHoverTip] = useState<{ name: string; capital: string | null; x: number; y: number } | null>(null)
@@ -160,10 +163,11 @@ export function GameShell() {
 
   const flagPool = useMemo(() => {
     const all = getCatalog()?.countries.filter((c) => c.iso.length === 2 && c.continent !== "Antarctica") ?? []
+    const filtered = filterCountryPool(all, progress.difficulty)
     const home = progress.learningContinent
-    const scoped = home ? all.filter((c) => c.continent === home) : all
-    return scoped.length >= 6 ? scoped : all
-  }, [stage, selectedIso, progress.learningContinent])
+    const scoped = home ? filtered.filter((c) => c.continent === home) : filtered
+    return scoped.length >= 6 ? scoped : filtered.length ? filtered : all
+  }, [stage, selectedIso, progress.learningContinent, progress.difficulty])
 
   function newFlagRound(kind: (typeof FLAG_MODES)[number] = "flag") {
     const pool = flagPool.length ? flagPool : [{ iso: "KG", name: "Кыргызстан", capital: "Бишкек", lat: 41.2, lng: 74.6, continent: "Asia", a3: "KGZ", nameEn: "Kyrgyzstan", subregion: "", pop: 0 }]
@@ -250,18 +254,15 @@ export function GameShell() {
     setFlagRound(round)
     startMission(round)
     if (kind === "shape") useGame.setState({ highlightIso: c.iso })
-    setHintOn(false)
   }
 
   useEffect(() => {
     if (stage !== "flag") {
       setFlagRound(null)
-      setHoverTip(null)
       return
     }
     if (mission?.kind === "flag" && mission.targetIso) setFlagRound(mission)
     else if (!mission || (mission.kind !== "flag" && !mission.id.startsWith("daily-"))) newFlagRound("flag")
-    setHoverTip(null)
   }, [stage, mission?.id, mission?.kind])
 
   useEffect(() => {
@@ -543,13 +544,7 @@ export function GameShell() {
                 <input type="checkbox" checked={progress.sfxOn} onChange={(e) => useGame.getState().setSfx(e.target.checked)} />
               </label>
               <input type="range" min={0} max={1} step={0.05} value={progress.sfxVol} onChange={(e) => useGame.getState().setSfxVol(Number(e.target.value))} />
-              <div className="diff-row">
-                {(["easy", "medium", "hard"] as const).map((d) => (
-                  <button key={d} type="button" className={progress.difficulty === d ? "chip on" : "chip"} onClick={() => useGame.getState().setDifficulty(d)}>
-                    {dict.settings[d]}
-                  </button>
-                ))}
-              </div>
+              <DifficultyDock />
               <p className="tiny">
                 {ui.learningArea}: {CONTINENT_RU[progress.learningContinent] ?? (progress.learningContinent || "—")}
               </p>
@@ -567,14 +562,7 @@ export function GameShell() {
         </article>
         <div className="hud-peek">
           <div className="hud-hint-row" id="gq-hint-row" hidden={hudMin}>
-            {(stage === "mission" || stage === "flag") && mission ? (
-              <>
-                {hintOn ? <p className="hint-box">{mission.hint}</p> : null}
-                <button type="button" className="btn ghost" onClick={() => setHintOn(true)}>
-                  {ui.hint}
-                </button>
-              </>
-            ) : null}
+            <HintLadder />
           </div>
           <button
             type="button"
@@ -610,6 +598,7 @@ export function GameShell() {
         ) : (
           <div className="timer-idle">{campaign ? ui.missions : ui.explore}</div>
         )}
+        <DifficultyDock />
         <div className="stat-stack">
           <div className="stat">
             <span>{ui.level}</span>
@@ -692,7 +681,9 @@ export function GameShell() {
           onPick={judge}
           onPoint={(title, text) => setPoint({ title, text })}
           onHover={(hit) => {
-            if (hideNames || !hit?.name) setHoverTip(null)
+            if (!hit?.name) setHoverTip(null)
+            else if (hideNames)
+              setHoverTip(null)
             else
               setHoverTip({
                 name: hit.name,

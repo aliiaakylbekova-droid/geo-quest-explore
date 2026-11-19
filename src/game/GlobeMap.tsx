@@ -43,7 +43,9 @@ export function EarthBundle({
   const [pack, setPack] = useState<Awaited<ReturnType<typeof loadCatalog>> | null>(null)
   const [hoverIso, setHoverIso] = useState<string | null>(null)
   const countries = pack?.countries ?? BUNDLED_NAMES
-  const showNames = stage === "flag" || (stage !== "mission" && stage !== "discover" && !campaign)
+  const roundRules = useGame((s) => s.roundRules)
+  const hunting = stage === "mission" || stage === "flag" || Boolean(campaign)
+  const showNames = stage !== "discover" && (!hunting || Boolean(roundRules?.showNames) || stage === "explore")
   const hoverCapitals = stage === "flag"
   const labeled = useMemo(() => {
     if (lod === 0) return countries.filter((c) => (c.pop ?? 0) > 12_000_000)

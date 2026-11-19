@@ -14,7 +14,9 @@ import {
 } from "../data/learning"
 import { countryNameOf, continentOf, evaluateLevel, evaluateMission } from "../geo/hitTest"
 import { getCatalog, LANDMARKS } from "../geo/catalog"
-import type { StoryMission } from "../game/storyMissions"
+import { costForHint, rulesFor, type RoundRules } from "../game/difficulty"
+import { buildExtraHints } from "../game/hintSteps"
+import { STORY_MISSIONS, type StoryMission } from "../game/storyMissions"
 import type { Locale } from "../i18n"
 import { setLocale, t } from "../i18n"
 import type { Layers } from "../three/EarthScene"
@@ -29,8 +31,18 @@ export type CampaignPhase = "play" | "correct" | "success" | "wrong" | "timeout"
 export type HitTint = "gold" | "cyan" | "red" | "orange" | null
 
 let autoAdvanceTimer = 0
+let pulseTimer = 0
 const flagFlowTimers: number[] = []
 const TIMEOUT_PENALTY = 20
+
+const HINT_RESET = {
+  baseHintOn: false,
+  hintRung: 0,
+  hintLine: null as string | null,
+  hintLines: [] as string[],
+  pulseIsos: [] as string[],
+  pulseCenter: null as { lat: number; lng: number } | null,
+}
 
 function clearFlagFlow() {
   while (flagFlowTimers.length) {
@@ -243,6 +255,14 @@ type GameState = {
   toast: { text: string; kind: ToastKind } | null
   rewardPulse: number
   activeDailyId: string | null
+  roundRules: RoundRules | null
+  baseHintOn: boolean
+  hintRung: number
+  hintLine: string | null
+  hintLines: string[]
+  pulseIsos: string[]
+  pulseCenter: { lat: number; lng: number } | null
+  missionSummary: { title: string; recap: string; xp: number; streak: number; coins: number } | null
   hydrate: () => Promise<void>
   register: (name: string, avatar: string) => Promise<void>
   finishIntro: () => void
@@ -258,6 +278,8 @@ type GameState = {
   fly: (lat: number, lng: number, dist?: number) => void
   setFeedback: (ok: boolean, text: string) => void
   setDifficulty: (d: Progress["difficulty"]) => void
+  showBaseHint: () => void
+  requestExtraHint: () => void
   setVolume: (v: number) => void
   setMusic: (on: boolean) => void
   toggleMusic: () => void
@@ -324,6 +346,9 @@ export const useGame = create<GameState>((set, get) => ({
   toast: null,
   rewardPulse: 0,
   activeDailyId: null,
+  roundRules: null,
+  ...HINT_RESET,
+  missionSummary: null,
 
   hydrate: async () => {
     try {
@@ -427,6 +452,10 @@ export const useGame = create<GameState>((set, get) => ({
             mission: null,
             missionEndsAt: null,
             flagFillIso: null,
+            roundRules: null,
+            missionSummary: null,
+            ...HINT_RESET,
+            layers: { ...get().layers, borders: true },
           }
         : {}),
     })
@@ -550,8 +579,13 @@ export const useGame = create<GameState>((set, get) => ({
       if (freshAch.length) audio.play("achievement")
       if (isNewCountry) audio.play("unlock")
       if (playerLevel(scored.xp) > beforeLevel) audio.play("transition")
-      const toastText = isNewCountry ? t().play.openedCountry : t().play.correctLocation
+      const praise = isNewCountry ? t().play.openedCountry : t().play.correctLocation
+      const streakBit = streakBonus > 0 ? ` · ${t().play.streakBonus.replace("{n}", String(streakBonus))}` : ""
+      const toastText = `${praise} · +${gained} XP${streakBit}`
       const missionId = st.mission?.id
+      const storyIdx = st.mission ? STORY_MISSIONS.findIndex((m) => m.id === st.mission!.id) : -1
+      const lastStory = useStory && storyIdx >= 0 && !STORY_MISSIONS[storyIdx + 1]
+      if (lastStory) audio.play("missionComplete")
       clearFlagFlow()
       set({
         selectedIso: hit.iso,
@@ -572,6 +606,15 @@ export const useGame = create<GameState>((set, get) => ({
         toast: useFlag ? null : { text: toastText, kind: freshAch.length ? "ach" : "ok" },
         rewardPulse: useFlag ? 0 : gained,
         activeDailyId: useDaily && scored.dailyTasks.find((task) => task.id === st.activeDailyId)?.done ? null : st.activeDailyId,
+        missionSummary: lastStory
+          ? {
+              title: st.mission?.title ?? t().play.missions,
+              recap: st.mission?.recap ?? praise,
+              xp: gained,
+              streak: playStreak,
+              coins: 20 + (isNewCountry ? 10 : 0),
+            }
+          : st.missionSummary,
       })
       void persist(scored)
       if (useFlag) {
@@ -610,7 +653,13 @@ export const useGame = create<GameState>((set, get) => ({
     } else {
       audio.play("fail")
       const hint = useFlag ? t().play.flagWrong : useCampaign ? st.campaign!.hint : st.mission?.hint || t().play.tryElsewhere
-      const broken = { ...progress, playStreak: 0 }
+      const miss = st.roundRules?.missPenalty ?? 0
+      const broken = {
+        ...progress,
+        playStreak: 0,
+        xp: miss > 0 ? Math.max(0, progress.xp - miss) : progress.xp,
+        coins: miss > 0 ? Math.max(0, progress.coins - miss) : progress.coins,
+      }
       clearFlagFlow()
       set({
         selectedIso: useFlag ? null : hit.iso,
@@ -620,19 +669,24 @@ export const useGame = create<GameState>((set, get) => ({
         progress: broken,
         campaignPhase: useCampaign ? "wrong" : st.campaignPhase,
         hitTint: "red",
-        screenFlash: null,
-        flagMoment: null,
+        screenFlash: "red",
+        flagMoment: useFlag ? "lose" : get().flagMoment,
         flagFillIso: get().flagFillIso,
         lastFeedback: { ok: false, text: hint },
+        displayXp: miss > 0 ? broken.xp : st.displayXp,
       })
       void persist(broken)
+      window.setTimeout(() => {
+        if (get().screenFlash === "red") set({ screenFlash: null })
+      }, 1150)
       window.setTimeout(() => {
         if (get().hitTint !== "red") return
         set({
           hitTint: null,
           campaignPhase: useCampaign ? "play" : get().campaignPhase,
+          flagMoment: get().flagMoment === "lose" ? null : get().flagMoment,
         })
-      }, useFlag ? 640 : 2200)
+      }, useFlag ? 1200 : 1400)
     }
     void fact
   },
@@ -655,7 +709,8 @@ export const useGame = create<GameState>((set, get) => ({
   },
 
   startMission: (mission) => {
-    const bonus = get().progress.difficulty === "hard" ? 0.7 : get().progress.difficulty === "easy" ? 1.4 : 1
+    window.clearTimeout(pulseTimer)
+    const rules = rulesFor(get().progress.difficulty, "mission")
     const flagLike = mission.kind === "flag" || mission.kind === "capital" || mission.kind === "neighbors" || mission.kind === "shape"
     const daily = mission.id.startsWith("daily-")
     audio.play("transition")
@@ -664,7 +719,7 @@ export const useGame = create<GameState>((set, get) => ({
       mission,
       campaign: flagLike || daily ? null : get().campaign,
       campaignPhase: "play",
-      missionEndsAt: Date.now() + mission.timeMs * bonus,
+      missionEndsAt: Date.now() + mission.timeMs * rules.timerMul,
       lastFeedback: null,
       flagMoment: null,
       flagFillIso: null,
@@ -676,6 +731,10 @@ export const useGame = create<GameState>((set, get) => ({
       activeDailyId: daily ? mission.id : null,
       toast: null,
       rewardPulse: 0,
+      roundRules: rules,
+      missionSummary: null,
+      ...HINT_RESET,
+      layers: { ...get().layers, borders: rules.showBorders },
       flyTo: flagLike || daily
         ? CONTINENT_FLY[get().progress.learningContinent] ?? { lat: 22, lng: 18, dist: 6.6 }
         : mission.lat != null
@@ -685,6 +744,7 @@ export const useGame = create<GameState>((set, get) => ({
   },
 
   clearMission: () => {
+    window.clearTimeout(pulseTimer)
     clearFlagFlow()
     set({
       mission: null,
@@ -694,6 +754,10 @@ export const useGame = create<GameState>((set, get) => ({
       flagMoment: null,
       flagFillIso: null,
       stage: "hub",
+      roundRules: null,
+      missionSummary: null,
+      ...HINT_RESET,
+      layers: { ...get().layers, borders: true },
       flyTo: CONTINENT_FLY[get().progress.learningContinent] ?? { lat: 18, lng: 20, dist: 6.5 },
     })
   },
@@ -718,6 +782,9 @@ export const useGame = create<GameState>((set, get) => ({
       advancing: false,
       flyTo: null,
       highlightIso: null,
+      roundRules: null,
+      missionSummary: null,
+      ...HINT_RESET,
     })
   },
 
@@ -749,9 +816,46 @@ export const useGame = create<GameState>((set, get) => ({
   setFeedback: (ok, text) => set({ lastFeedback: { ok, text }, highlightIso: ok ? get().selectedIso : get().highlightIso }),
 
   setDifficulty: (d) => {
+    if (get().progress.difficulty === d) return
     const progress = { ...get().progress, difficulty: d }
     set({ progress })
     void persist(progress)
+  },
+
+  showBaseHint: () => set({ baseHintOn: true }),
+
+  requestExtraHint: () => {
+    const st = get()
+    if (st.lastFeedback?.ok) return
+    if (!st.mission && !st.campaign) return
+    const steps = buildExtraHints(st.mission, st.campaign)
+    const step = steps[st.hintRung]
+    if (!step) return
+    const rules = st.roundRules ?? rulesFor(st.progress.difficulty)
+    const cost = costForHint(st.hintRung, step.kind, rules)
+    if (cost > 0 && st.progress.coins < cost) return
+    const progress =
+      cost > 0 ? { ...st.progress, coins: Math.max(0, st.progress.coins - cost) } : st.progress
+    window.clearTimeout(pulseTimer)
+    const pulsing = step.kind === "pulse" && (step.pulseIsos.length > 0 || (step.lat != null && step.lng != null))
+    set({
+      progress,
+      hintRung: st.hintRung + 1,
+      hintLine: step.text,
+      hintLines: [...st.hintLines, step.text],
+      pulseIsos: pulsing ? step.pulseIsos : [],
+      pulseCenter: pulsing && step.lat != null && step.lng != null ? { lat: step.lat, lng: step.lng } : null,
+      flyTo:
+        pulsing && step.lat != null && step.lng != null
+          ? { lat: step.lat, lng: step.lng, dist: 6.15 }
+          : st.flyTo,
+    })
+    if (cost > 0) void persist(progress)
+    if (pulsing) {
+      pulseTimer = window.setTimeout(() => {
+        if (get().pulseIsos.length || get().pulseCenter) set({ pulseIsos: [], pulseCenter: null })
+      }, 7000)
+    }
   },
 
   setVolume: (v) => {
@@ -918,9 +1022,10 @@ export const useGame = create<GameState>((set, get) => ({
   clearToast: () => set({ toast: null, rewardPulse: 0 }),
 
   startCampaign: (index) => {
+    window.clearTimeout(pulseTimer)
     const i = Math.max(0, Math.min(GEO_CAMPAIGN.length - 1, index ?? get().progress.campaignIndex))
     const level = GEO_CAMPAIGN[i]
-    const bonus = get().progress.difficulty === "hard" ? 0.75 : get().progress.difficulty === "easy" ? 1.35 : 1
+    const rules = rulesFor(get().progress.difficulty, "campaign")
     audio.play("transition")
     audio.play("zoom")
     set({
@@ -933,9 +1038,13 @@ export const useGame = create<GameState>((set, get) => ({
       highlightIso: null,
       mission: null,
       stage: "mission",
-      missionEndsAt: Date.now() + level.timeMs * bonus,
+      missionEndsAt: Date.now() + level.timeMs * rules.timerMul,
       flyTo: { ...level.fly },
       advancing: false,
+      roundRules: rules,
+      missionSummary: null,
+      ...HINT_RESET,
+      layers: { ...get().layers, borders: rules.showBorders },
     })
   },
 
@@ -945,16 +1054,21 @@ export const useGame = create<GameState>((set, get) => ({
       get().startCampaign()
       return
     }
-    const bonus = get().progress.difficulty === "hard" ? 0.75 : get().progress.difficulty === "easy" ? 1.35 : 1
+    const rules = rulesFor(get().progress.difficulty, "campaign")
     audio.play("transition")
+    window.clearTimeout(pulseTimer)
     set({
       campaignPhase: "play",
       hitTint: null,
       lastFeedback: null,
       lastPenalty: 0,
       flagMoment: null,
-      missionEndsAt: Date.now() + level.timeMs * bonus,
+      missionEndsAt: Date.now() + level.timeMs * rules.timerMul,
       flyTo: { ...level.fly },
+      roundRules: rules,
+      missionSummary: null,
+      ...HINT_RESET,
+      layers: { ...get().layers, borders: rules.showBorders },
     })
   },
 
@@ -996,8 +1110,9 @@ export const useGame = create<GameState>((set, get) => ({
     const next = GEO_CAMPAIGN[nextIndex]
     audio.play("transition")
     audio.play("zoom")
-    const bonus = progress.difficulty === "hard" ? 0.75 : progress.difficulty === "easy" ? 1.35 : 1
+    const rules = rulesFor(progress.difficulty, "campaign")
     void persist(progress)
+    window.clearTimeout(pulseTimer)
     set({
       progress,
       campaign: next,
@@ -1006,10 +1121,14 @@ export const useGame = create<GameState>((set, get) => ({
       selectedIso: null,
       highlightIso: null,
       lastFeedback: null,
-      missionEndsAt: Date.now() + next.timeMs * bonus,
+      missionEndsAt: Date.now() + next.timeMs * rules.timerMul,
       flyTo: { ...next.fly },
       stage: "mission",
       advancing: false,
+      roundRules: rules,
+      missionSummary: null,
+      ...HINT_RESET,
+      layers: { ...get().layers, borders: rules.showBorders },
     })
   },
 

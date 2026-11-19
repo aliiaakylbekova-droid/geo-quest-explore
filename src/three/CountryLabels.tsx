@@ -79,11 +79,16 @@ export function CountryLabels({
       const iso = sp.name
       const world = sp.getWorldPosition(scratch.current)
       const facing = world.dot(cam) > 0
-      if (!facing || dist < 3.05) {
+      const keep = iso === keepIso
+      if (!facing) {
         sp.visible = false
         continue
       }
-      if (hideExtras && iso !== keepIso) {
+      if (!keep && dist < 3.05) {
+        sp.visible = false
+        continue
+      }
+      if (hideExtras && !keep) {
         sp.visible = false
         continue
       }
@@ -99,10 +104,10 @@ export function CountryLabels({
           break
         }
       }
-      const keep = iso === keepIso
       sp.visible = keep || !overlap
       if (sp.visible) accepted.push({ x: sx, y: sy })
-      sp.scale.set(s * 2.2, s * 0.52, 1)
+      const scale = keep && dist < 4.1 ? Math.max(s, 0.24) : s
+      sp.scale.set(scale * 2.2, scale * 0.52, 1)
     }
   })
 

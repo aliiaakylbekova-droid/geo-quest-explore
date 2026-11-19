@@ -31,9 +31,13 @@ declare global {
       timeout: () => void
       coins: () => number
       skipTutorial: () => void
+      finishIntro?: () => void
       continue: () => void
       retry: () => void
       campaign: (index?: number) => void
+      hub?: () => void
+      puzzle?: () => void
+      continent?: (id?: string) => void
     }
   }
 }

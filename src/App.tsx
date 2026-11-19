@@ -49,6 +49,7 @@ export default function App() {
       skipTutorial: () => {
         localStorage.setItem("gq-tutorial-done", "1")
       },
+      finishIntro: () => useGame.getState().finishIntro(),
       daily: () => useGame.getState().openDaily(),
       toast: () => useGame.getState().toast?.text ?? null,
       hub: () => useGame.getState().setStage("hub"),
