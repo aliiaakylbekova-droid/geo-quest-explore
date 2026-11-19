@@ -13,6 +13,16 @@ import {
   type WeeklyChallenge,
 } from "../data/learning"
 import {
+  emptyHelps,
+  makePrizeBoxes,
+  mergeHelps,
+  mergePrizeBoxes,
+  rollGrant,
+  type HelpCounts,
+  type HelpKind,
+  type PrizeBox,
+} from "../data/helps"
+import {
   JOURNEY_EXPLORE_GOAL,
   JOURNEY_FLAGS_GOAL,
   journeyXp,
@@ -106,6 +116,9 @@ export type Progress = {
   weeklyKey: string
   weekly: WeeklyChallenge[]
   journeyAwarded: string[]
+  helps: HelpCounts
+  journeyBestXp: number
+  prizeBoxes: PrizeBox[]
 }
 
 const defaultProgress = (): Progress => ({
@@ -145,6 +158,9 @@ const defaultProgress = (): Progress => ({
   weeklyKey: "",
   weekly: [],
   journeyAwarded: [],
+  helps: emptyHelps(),
+  journeyBestXp: 0,
+  prizeBoxes: [],
 })
 
 function ensureDaily(progress: Progress): Progress {
@@ -277,6 +293,8 @@ type GameState = {
   pulseIsos: string[]
   pulseCenter: { lat: number; lng: number } | null
   missionSummary: { title: string; recap: string; xp: number; streak: number; coins: number } | null
+  freezeUntil: number | null
+  frozenRemain: number
   journey: Journey | null
   journeyPick: LearningContinent | null
   hydrate: () => Promise<void>
@@ -329,6 +347,11 @@ type GameState = {
   resolveJourneyPick: (hit: { iso: string | null; lat: number; lng: number }, name: string | null, visited: string[]) => void
   awardJourney: (draft: Journey) => void
   resumeJourney: () => void
+  openPrizeBox: (id: string) => void
+  useSkip: () => void
+  useFreeze: () => void
+  useRevealRegion: () => void
+  endFreeze: () => void
 }
 
 function continentPool(continent: string) {
@@ -366,11 +389,26 @@ function persistJourney(journey: Journey | null) {
   writeJourneySession(journey)
 }
 
+function withProfileHelps(profile: Profile | null, progress: Progress): Profile | null {
+  if (!profile) return null
+  return { ...profile, helps: progress.helps, journeyBestXp: progress.journeyBestXp }
+}
+
 async function persist(progress: Progress, profile?: Profile | null) {
   if (window.geoQuest) await window.geoQuest.saveProgress(progress)
   else localStorage.setItem("gq-progress", JSON.stringify(progress))
-  const who = profile ?? useGame.getState().profile
+  const who = withProfileHelps(profile ?? useGame.getState().profile, progress)
+  if (who) {
+    if (window.geoQuest) await window.geoQuest.saveProfile(who)
+    else localStorage.setItem("gq-profile", JSON.stringify(who))
+  }
   void cloudPush(who, progress)
+}
+
+function consumeHelp(progress: Progress, kind: HelpKind): Progress | null {
+  const n = progress.helps[kind] ?? 0
+  if (n <= 0) return null
+  return { ...progress, helps: { ...progress.helps, [kind]: n - 1 } }
 }
 
 function grant(progress: Progress, id: string) {
@@ -411,6 +449,8 @@ export const useGame = create<GameState>((set, get) => ({
   roundRules: null,
   ...HINT_RESET,
   missionSummary: null,
+  freezeUntil: null,
+  frozenRemain: 0,
   journey: null,
   journeyPick: null,
 
@@ -433,6 +473,12 @@ export const useGame = create<GameState>((set, get) => ({
       if (!Array.isArray(progress.journeyAwarded)) progress = { ...progress, journeyAwarded: [] }
       if (!Array.isArray(progress.weekly)) progress = { ...progress, weekly: [] }
       if (typeof progress.learningContinent !== "string") progress = { ...progress, learningContinent: "" }
+      progress = {
+        ...progress,
+        helps: mergeHelps(progress.helps ?? profile?.helps),
+        journeyBestXp: Number(progress.journeyBestXp) || Number(profile?.journeyBestXp) || 0,
+        prizeBoxes: mergePrizeBoxes(progress.prizeBoxes),
+      }
       progress = ensureWeekly(progress)
       let nextProfile = profile
       if (!nextProfile) {
@@ -440,6 +486,12 @@ export const useGame = create<GameState>((set, get) => ({
         if (cloud.profile) {
           nextProfile = cloud.profile
           if (cloud.progress) progress = touchLogin({ ...defaultProgress(), ...cloud.progress })
+          progress = {
+            ...progress,
+            helps: mergeHelps(progress.helps ?? nextProfile.helps),
+            journeyBestXp: Number(progress.journeyBestXp) || Number(nextProfile.journeyBestXp) || 0,
+            prizeBoxes: mergePrizeBoxes(progress.prizeBoxes),
+          }
           if (window.geoQuest) {
             await window.geoQuest.saveProfile(nextProfile)
             await window.geoQuest.saveProgress(progress)
@@ -904,15 +956,42 @@ export const useGame = create<GameState>((set, get) => ({
   requestExtraHint: () => {
     const st = get()
     if (st.lastFeedback?.ok) return
-    if (!st.mission && !st.campaign) return
+    if (!st.mission && !st.campaign) {
+      if (!st.journey?.targetIso) return
+      const paid = consumeHelp(st.progress, "extraHint")
+      if (!paid) return
+      const rec = getCatalog()?.byIso.get(st.journey.targetIso)
+      const profile = withProfileHelps(st.profile, paid)
+      window.clearTimeout(pulseTimer)
+      set({
+        progress: paid,
+        profile,
+        pulseIsos: rec ? [rec.iso] : [],
+        pulseCenter: rec ? { lat: rec.lat, lng: rec.lng } : null,
+        flyTo: rec ? { lat: rec.lat, lng: rec.lng, dist: 6.15 } : st.flyTo,
+      })
+      void persist(paid, profile)
+      pulseTimer = window.setTimeout(() => {
+        if (get().pulseIsos.length || get().pulseCenter) set({ pulseIsos: [], pulseCenter: null })
+      }, 7000)
+      return
+    }
     const steps = buildExtraHints(st.mission, st.campaign)
     const step = steps[st.hintRung]
     if (!step) return
     const rules = st.roundRules ?? rulesFor(st.progress.difficulty)
-    const cost = costForHint(st.hintRung, step.kind, rules)
+    const billed = costForHint(st.hintRung, step.kind, rules)
+    let cost = billed
+    let progress = st.progress
+    if (cost > 0 && (progress.helps.extraHint ?? 0) > 0) {
+      const paid = consumeHelp(progress, "extraHint")
+      if (paid) {
+        progress = paid
+        cost = 0
+      }
+    }
     if (cost > 0 && st.progress.coins < cost) return
-    const progress =
-      cost > 0 ? { ...st.progress, coins: Math.max(0, st.progress.coins - cost) } : st.progress
+    progress = cost > 0 ? { ...progress, coins: Math.max(0, progress.coins - cost) } : progress
     window.clearTimeout(pulseTimer)
     const pulsing = step.kind === "pulse" && (step.pulseIsos.length > 0 || (step.lat != null && step.lng != null))
     set({
@@ -927,7 +1006,7 @@ export const useGame = create<GameState>((set, get) => ({
           ? { lat: step.lat, lng: step.lng, dist: 6.15 }
           : st.flyTo,
     })
-    if (cost > 0) void persist(progress)
+    if (cost > 0 || billed > 0) void persist(progress)
     if (pulsing) {
       pulseTimer = window.setTimeout(() => {
         if (get().pulseIsos.length || get().pulseCenter) set({ pulseIsos: [], pulseCenter: null })
@@ -1189,7 +1268,27 @@ export const useGame = create<GameState>((set, get) => ({
   finishJourneyPuzzle: (_xp, leftoverMs) => {
     const j = get().journey
     if (!j || j.leg !== "puzzle" || j.awarded) return
-    const next: Journey = { ...j, leg: "results", puzzleLeftoverMs: leftoverMs, xpPending: journeyXp({ ...j, puzzleLeftoverMs: leftoverMs }) }
+    const boxes = makePrizeBoxes(3)
+    const next: Journey = {
+      ...j,
+      leg: "results",
+      puzzleLeftoverMs: leftoverMs,
+      xpPending: journeyXp({ ...j, puzzleLeftoverMs: leftoverMs }),
+      prizeBoxes: boxes,
+    }
+    set({
+      stage: "explore",
+      selectedIso: null,
+      highlightIso: null,
+      lastCountryName: null,
+      lastHit: null,
+      lastFeedback: null,
+      flagFillIso: null,
+      flagMoment: null,
+      mission: null,
+      missionEndsAt: null,
+      flyTo: CONTINENT_FLY[j.continent] ?? { lat: 18, lng: 20, dist: 6.8 },
+    })
     get().awardJourney(next)
   },
 
@@ -1406,7 +1505,19 @@ export const useGame = create<GameState>((set, get) => ({
       set({ stage: "puzzle", mission: null, missionEndsAt: null, flyTo: fly })
       return
     }
-    if (j.leg === "inter-flags" || j.leg === "inter-puzzle" || j.leg === "results") {
+    if (j.leg === "results") {
+      set({
+        stage: "explore",
+        mission: null,
+        missionEndsAt: null,
+        selectedIso: null,
+        highlightIso: null,
+        flagFillIso: null,
+        flyTo: fly,
+      })
+      return
+    }
+    if (j.leg === "inter-flags" || j.leg === "inter-puzzle") {
       set({ stage: "hub", mission: null, missionEndsAt: null })
     }
   },
@@ -1422,26 +1533,142 @@ export const useGame = create<GameState>((set, get) => ({
       return
     }
     const xp = journeyXp(j)
+    const boxes = j.prizeBoxes.length ? j.prizeBoxes : makePrizeBoxes(3)
     progress = {
       ...progress,
       xp: progress.xp + xp,
       coins: progress.coins + 40,
       continentXp: progress.continentXp + xp,
       journeyAwarded: [...progress.journeyAwarded, j.id],
+      journeyBestXp: Math.max(progress.journeyBestXp, xp),
+      prizeBoxes: boxes,
     }
     progress = grantMany(progress, achievementIdsFor(progress))
-    const done = { ...j, awarded: true, xpPending: xp, leg: "results" as JourneyLeg }
+    const done = { ...j, awarded: true, xpPending: xp, prizeBoxes: boxes, leg: "results" as JourneyLeg }
     persistJourney(null)
     audio.play("missionComplete")
     audio.play("success")
+    const profile = withProfileHelps(get().profile, progress)
     set({
       progress,
+      profile,
       displayXp: progress.xp,
       journey: done,
       rewardPulse: xp,
-      toast: { text: `${t().play.journeyResults} · +${xp} XP`, kind: "ach" },
+      toast: null,
+      stage: "explore",
+      selectedIso: null,
+      highlightIso: null,
+      flagFillIso: null,
+      mission: null,
     })
-    void persist(progress)
+    void persist(progress, profile)
+  },
+
+  openPrizeBox: (id) => {
+    const st = get()
+    const boxes = st.journey?.prizeBoxes?.length ? st.journey.prizeBoxes : st.progress.prizeBoxes
+    const box = boxes.find((b) => b.id === id)
+    if (!box || box.opened) return
+    const grant = rollGrant()
+    const nextBoxes = boxes.map((b) => (b.id === id ? { ...b, opened: true, grant } : b))
+    const helps = { ...st.progress.helps, [grant]: (st.progress.helps[grant] ?? 0) + 1 }
+    const progress = { ...st.progress, helps, prizeBoxes: nextBoxes }
+    const journey = st.journey ? { ...st.journey, prizeBoxes: nextBoxes } : st.journey
+    const profile = withProfileHelps(st.profile, progress)
+    audio.play("unlock")
+    audio.play("discovery")
+    set({
+      progress,
+      profile,
+      journey,
+      toast: {
+        text: `${t().play.boxOpened}: ${grant === "extraHint" ? t().play.helpExtraHint : grant === "skip" ? t().play.helpSkip : grant === "freeze" ? t().play.helpFreeze : t().play.helpReveal}`,
+        kind: "ok",
+      },
+    })
+    void persist(progress, profile)
+  },
+
+  useSkip: () => {
+    const st = get()
+    const progress = consumeHelp(st.progress, "skip")
+    if (!progress) return
+    const profile = withProfileHelps(st.profile, progress)
+    set({ progress, profile })
+    void persist(progress, profile)
+    audio.play("transition")
+    if (st.journey && (st.journey.leg === "explore" || st.journey.leg === "flags") && st.journey.targetIso) {
+      const rec = getCatalog()?.byIso.get(st.journey.targetIso)
+      get().resolveJourneyPick(
+        { iso: st.journey.targetIso, lat: rec?.lat ?? 0, lng: rec?.lng ?? 0 },
+        rec?.name ?? null,
+        progress.visited,
+      )
+      return
+    }
+    const iso =
+      st.mission?.targetIso ??
+      (st.campaign?.check && "iso" in st.campaign.check ? st.campaign.check.iso : null)
+    if (!iso) return
+    const rec = getCatalog()?.byIso.get(iso)
+    get().pick({ iso, lat: rec?.lat ?? st.mission?.lat ?? 0, lng: rec?.lng ?? st.mission?.lng ?? 0 })
+  },
+
+  useFreeze: () => {
+    const st = get()
+    if (!st.missionEndsAt) return
+    if (st.freezeUntil && st.freezeUntil > Date.now()) return
+    const progress = consumeHelp(st.progress, "freeze")
+    if (!progress) return
+    const remain = Math.max(0, st.missionEndsAt - Date.now())
+    const profile = withProfileHelps(st.profile, progress)
+    audio.play("transition")
+    set({
+      progress,
+      profile,
+      freezeUntil: Date.now() + 12_000,
+      frozenRemain: remain,
+      missionEndsAt: null,
+    })
+    void persist(progress, profile)
+  },
+
+  useRevealRegion: () => {
+    const st = get()
+    const progress = consumeHelp(st.progress, "revealRegion")
+    if (!progress) return
+    const profile = withProfileHelps(st.profile, progress)
+    let pulse = buildExtraHints(st.mission, st.campaign).find((step) => step.kind === "pulse")
+    if (!pulse && st.journey?.targetIso) {
+      const rec = getCatalog()?.byIso.get(st.journey.targetIso)
+      pulse = rec
+        ? { kind: "pulse", text: "", lat: rec.lat, lng: rec.lng, pulseIsos: [rec.iso] }
+        : undefined
+    }
+    window.clearTimeout(pulseTimer)
+    set({
+      progress,
+      profile,
+      pulseIsos: pulse?.pulseIsos ?? [],
+      pulseCenter: pulse && pulse.lat != null && pulse.lng != null ? { lat: pulse.lat, lng: pulse.lng } : null,
+      flyTo:
+        pulse && pulse.lat != null && pulse.lng != null ? { lat: pulse.lat, lng: pulse.lng, dist: 6.15 } : st.flyTo,
+    })
+    void persist(progress, profile)
+    pulseTimer = window.setTimeout(() => {
+      if (get().pulseIsos.length || get().pulseCenter) set({ pulseIsos: [], pulseCenter: null })
+    }, 7000)
+  },
+
+  endFreeze: () => {
+    const st = get()
+    if (!st.freezeUntil) return
+    set({
+      freezeUntil: null,
+      frozenRemain: 0,
+      missionEndsAt: st.frozenRemain ? Date.now() + st.frozenRemain : st.missionEndsAt,
+    })
   },
 
   clearToast: () => set({ toast: null, rewardPulse: 0 }),
@@ -1559,8 +1786,10 @@ export const useGame = create<GameState>((set, get) => ({
 
   tickTimeout: () => {
     const st = get()
+    if (st.freezeUntil && Date.now() < st.freezeUntil) return
+    if (st.freezeUntil) get().endFreeze()
     if (st.campaignPhase === "timeout") return
-    if (!st.missionEndsAt) return
+    if (!get().missionEndsAt) return
     if (!st.campaign && !(st.mission && (st.stage === "flag" || st.stage === "mission"))) return
     audio.unlock()
     audio.play("timeout")

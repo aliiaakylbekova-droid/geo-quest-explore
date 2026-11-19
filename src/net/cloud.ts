@@ -1,3 +1,4 @@
+import { mergeHelps, mergePrizeBoxes } from "../data/helps"
 import type { Profile } from "../types/electron"
 import type { Progress } from "../store/gameStore"
 import { getSupabase, isCloudEnabled } from "./supabase"
@@ -50,6 +51,9 @@ function progressRow(userId: string, progress: Progress) {
     last_quest_date: progress.lastQuestDate,
     weekly_key: progress.weeklyKey,
     weekly: progress.weekly,
+    helps: progress.helps,
+    journey_best_xp: progress.journeyBestXp,
+    prize_boxes: progress.prizeBoxes,
     updated_at: new Date().toISOString(),
   }
 }
@@ -92,6 +96,9 @@ function progressFromRow(row: Record<string, unknown>): Progress {
     weeklyKey: String(row.weekly_key || ""),
     weekly: Array.isArray(row.weekly) ? (row.weekly as Progress["weekly"]) : [],
     journeyAwarded: Array.isArray(row.journey_awarded) ? (row.journey_awarded as string[]) : [],
+    helps: mergeHelps(row.helps),
+    journeyBestXp: Number(row.journey_best_xp) || 0,
+    prizeBoxes: mergePrizeBoxes(row.prize_boxes),
   }
 }
 

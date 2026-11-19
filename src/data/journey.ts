@@ -1,7 +1,8 @@
 import type { LearningContinent } from "./continents"
+import type { PrizeBox } from "./helps"
 
-export const JOURNEY_EXPLORE_GOAL = 5
-export const JOURNEY_FLAGS_GOAL = 5
+export const JOURNEY_EXPLORE_GOAL = 3
+export const JOURNEY_FLAGS_GOAL = 3
 export const JOURNEY_SESSION_KEY = "gq-journey"
 
 export type JourneyLeg = "pick" | "explore" | "inter-flags" | "flags" | "inter-puzzle" | "puzzle" | "results"
@@ -19,6 +20,7 @@ export type Journey = {
   puzzleLeftoverMs: number
   xpPending: number
   awarded: boolean
+  prizeBoxes: PrizeBox[]
 }
 
 export function newJourneyId() {
@@ -39,6 +41,7 @@ export function makeJourney(continent: LearningContinent): Journey {
     puzzleLeftoverMs: 0,
     xpPending: 0,
     awarded: false,
+    prizeBoxes: [],
   }
 }
 

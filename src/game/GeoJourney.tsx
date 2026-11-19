@@ -1,4 +1,6 @@
+import { useEffect } from "react"
 import { CONTINENT_PHOTO, LEARNING_CONTINENTS, continentLabel } from "../data/continents"
+import type { HelpKind } from "../data/helps"
 import { JOURNEY_EXPLORE_GOAL, JOURNEY_FLAGS_GOAL, journeyXp } from "../data/journey"
 import { formatClock } from "./logic"
 import { t } from "../i18n"
@@ -17,10 +19,18 @@ function legIndex(leg: string) {
   return 2
 }
 
+function helpLabel(kind: HelpKind) {
+  const ui = t().play
+  if (kind === "extraHint") return ui.helpExtraHint
+  if (kind === "skip") return ui.helpSkip
+  if (kind === "freeze") return ui.helpFreeze
+  return ui.helpReveal
+}
+
 export function JourneyIndicator() {
   const journey = useGame((s) => s.journey)
   const ui = t().play
-  if (!journey || journey.leg === "pick") return null
+  if (!journey || journey.leg === "pick" || journey.leg === "results") return null
   const active = legIndex(journey.leg)
   return (
     <ol className="gq-journey-ind" data-journey-ind={journey.leg} aria-label={ui.geoJourney}>
@@ -42,9 +52,17 @@ export function GeoJourneyLayer() {
   const replay = useGame((s) => s.replayJourney)
   const other = useGame((s) => s.otherJourneyContinent)
   const home = useGame((s) => s.exitJourney)
+  const openPrizeBox = useGame((s) => s.openPrizeBox)
   const profile = useGame((s) => s.profile)
+  const best = useGame((s) => s.progress.journeyBestXp)
   const ui = t().play
   const photo = `${import.meta.env.BASE_URL}textures/earth-day.jpg`
+
+  useEffect(() => {
+    if (journey?.leg !== "inter-flags" && journey?.leg !== "inter-puzzle") return
+    const id = window.setTimeout(() => useGame.getState().continueJourney(), 1100)
+    return () => window.clearTimeout(id)
+  }, [journey?.id, journey?.leg])
 
   if (!journey) return null
 
@@ -102,27 +120,27 @@ export function GeoJourneyLayer() {
   }
 
   if (journey.leg === "results") {
-    const pos = CONTINENT_PHOTO[journey.continent] ?? CONTINENT_PHOTO.Asia
     const elapsed = Math.max(0, Date.now() - journey.startedAt)
     const xp = journey.xpPending || journeyXp(journey)
+    const record = Math.max(best, xp)
+    const isRecord = xp >= record && xp > 0
+    const boxes = journey.prizeBoxes.length ? journey.prizeBoxes : []
     return (
       <div className="gq-journey-overlay is-results" data-journey="results">
-        <article className="gq-journey-card is-fade">
-          <div
-            className="gq-hub-photo"
-            style={{
-              backgroundImage: `url(${photo})`,
-              backgroundPosition: `${pos.x} ${pos.y}`,
-              backgroundSize: pos.size,
-            }}
-          />
+        <article className="gq-journey-card is-fade is-results-card">
           <p className="kicker">{ui.geoJourney}</p>
-          <h1>{ui.journeyResults}</h1>
+          <h1>{ui.youDidGreat}</h1>
           <p className="gq-hub-area">
             {continentLabel(journey.continent)}
             {profile?.name ? ` · ${profile.name}` : ""}
           </p>
           <ul className="gq-journey-stats">
+            <li>
+              {ui.xpThisRun}: +{xp} XP
+            </li>
+            <li>
+              {isRecord ? ui.newRecord : ui.record}: {record} XP
+            </li>
             <li>
               {ui.journeyExplore}: {journey.exploreCorrect}/{JOURNEY_EXPLORE_GOAL}
             </li>
@@ -135,13 +153,22 @@ export function GeoJourneyLayer() {
             <li>
               {ui.journeyTime}: {formatClock(elapsed)}
             </li>
-            <li>
-              {ui.streak}: {journey.flagsBest}
-            </li>
-            <li>
-              XP +{xp}
-            </li>
           </ul>
+          <p className="kicker">{ui.prizeBoxes}</p>
+          <div className="gq-prize-row" aria-label={ui.prizeBoxes}>
+            {boxes.map((box) => (
+              <button
+                key={box.id}
+                type="button"
+                className={`gq-prize-box${box.opened ? " is-open" : ""}`}
+                disabled={box.opened}
+                onClick={() => openPrizeBox(box.id)}
+              >
+                <i aria-hidden />
+                <span>{box.opened && box.grant ? `${ui.boxOpened}: ${helpLabel(box.grant)}` : ui.tapBox}</span>
+              </button>
+            ))}
+          </div>
           <div className="gq-exit-actions">
             <button type="button" className="intro-start intro-journey" onClick={() => replay()}>
               {ui.playAgain}

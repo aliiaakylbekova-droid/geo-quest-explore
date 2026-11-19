@@ -12,6 +12,7 @@ import { CampaignOverlay } from "./CampaignOverlay"
 import { DifficultyDock } from "./DifficultyDock"
 import { filterCountryPool } from "./difficulty"
 import { HintLadder } from "./MissionHints"
+import { HelpDock } from "./HelpDock"
 import { GeoJourneyLayer } from "./GeoJourney"
 import { LearningHub } from "./LearningHub"
 import { MapPuzzle } from "./MapPuzzle"
@@ -48,13 +49,14 @@ function SpeakerIcon({ on }: { on: boolean }) {
   )
 }
 
-function useTick(endsAt: number | null) {
+function useTick(endsAt: number | null, freezeUntil: number | null, frozenRemain: number) {
   const [now, setNow] = useState(Date.now())
   useEffect(() => {
-    if (!endsAt) return
+    if (!endsAt && !freezeUntil) return
     const id = window.setInterval(() => setNow(Date.now()), 200)
     return () => window.clearInterval(id)
-  }, [endsAt])
+  }, [endsAt, freezeUntil])
+  if (freezeUntil && now < freezeUntil) return frozenRemain
   return endsAt ? Math.max(0, endsAt - now) : 0
 }
 
@@ -78,6 +80,8 @@ export function GameShell() {
   const startMission = useGame((s) => s.startMission)
   const clearMission = useGame((s) => s.clearMission)
   const missionEndsAt = useGame((s) => s.missionEndsAt)
+  const freezeUntil = useGame((s) => s.freezeUntil)
+  const frozenRemain = useGame((s) => s.frozenRemain)
   const lastFeedback = useGame((s) => s.lastFeedback)
   const lastHit = useGame((s) => s.lastHit)
   const introPhase = useGame((s) => s.introPhase)
@@ -110,8 +114,11 @@ export function GameShell() {
   const [changeCont, setChangeCont] = useState(false)
   const exitToPlaque = useGame((s) => s.exitToPlaque)
   const lastTickSec = useRef<number | null>(null)
-  const left = useTick(missionEndsAt)
-  const clockOn = Boolean(missionEndsAt) && !journey && (Boolean(campaign) || stage === "flag" || stage === "mission")
+  const left = useTick(missionEndsAt, freezeUntil, frozenRemain)
+  const clockOn =
+    (Boolean(missionEndsAt) || Boolean(freezeUntil && freezeUntil > Date.now())) &&
+    !journey &&
+    (Boolean(campaign) || stage === "flag" || stage === "mission")
 
   function requestExit() {
     setMoreOpen(false)
@@ -272,6 +279,13 @@ export function GameShell() {
   }, [stage, mission?.id, mission?.kind])
 
   useEffect(() => {
+    if (!freezeUntil) return
+    const wait = Math.max(0, freezeUntil - Date.now())
+    const id = window.setTimeout(() => useGame.getState().endFreeze(), wait)
+    return () => window.clearTimeout(id)
+  }, [freezeUntil])
+
+  useEffect(() => {
     if (!toast) return
     const id = window.setTimeout(() => clearToast(), 2400)
     return () => window.clearTimeout(id)
@@ -357,7 +371,7 @@ export function GameShell() {
 
   return (
     <div
-      className={`gq-live hud intro-${introPhase}${screenFlash === "red" ? " is-flash-red" : ""}${hudMin ? " is-hud-min" : ""}`}
+      className={`gq-live hud intro-${introPhase}${screenFlash === "red" ? " is-flash-red" : ""}${hudMin ? " is-hud-min" : ""}${stage === "puzzle" ? " is-puzzle" : ""}${journey?.leg === "results" ? " is-results" : ""}`}
       data-hud="explorer-v2"
       data-intro={introPhase}
       data-stage={stage}
@@ -490,6 +504,10 @@ export function GameShell() {
                 <CompassGlobeWordmark compact />
                 {ui.opened}: {progress.visited.length} · {ui.loginStreak}: {progress.loginStreak}
               </p>
+              <p className="tiny">
+                {ui.helps}: {ui.helpExtraHint} {progress.helps.extraHint} · {ui.helpSkip} {progress.helps.skip} · {ui.helpFreeze}{" "}
+                {progress.helps.freeze} · {ui.helpReveal} {progress.helps.revealRegion}
+              </p>
               <div className="gq-cont-list">
                 {continentProgress.map((row) => (
                   <p key={row.cont} className="tiny">
@@ -579,6 +597,7 @@ export function GameShell() {
           <div className="hud-hint-row" id="gq-hint-row" hidden={hudMin}>
             <HintLadder />
           </div>
+          <HelpDock />
           <button
             type="button"
             className="hud-chrome-toggle"
@@ -928,7 +947,7 @@ export function GameShell() {
         </div>
       ) : null}
 
-      {stage === "explore" && country ? (
+      {stage === "explore" && country && journey?.leg !== "results" ? (
         <div className="country-pop-root">
           <aside className="country-pop" role="dialog" aria-labelledby="country-pop-title">
             <button type="button" className="country-pop-x" onClick={dismissCountry}>

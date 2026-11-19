@@ -1,7 +1,11 @@
+import type { HelpCounts } from "../data/helps"
+
 export type Profile = {
   name: string
   avatar: string
   createdAt: number
+  helps?: HelpCounts
+  journeyBestXp?: number
 }
 
 export type GeoQuestApi = {
@@ -44,6 +48,8 @@ declare global {
       journeyTarget?: () => string | null
       journeyHit?: () => void
       journeyMiss?: () => void
+      journeyFinish?: () => void
+      journeyResults?: () => void
     }
   }
 }

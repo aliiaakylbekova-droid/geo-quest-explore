@@ -69,6 +69,29 @@ export default function App() {
         useGame.getState().pick({ iso, lat: 0, lng: 0 })
       },
       journeyMiss: () => useGame.getState().pick({ iso: "XX", lat: 0, lng: 0 }),
+      journeyFinish: () => useGame.getState().finishJourneyPuzzle(90, 40_000),
+      journeyResults: () => {
+        const st = useGame.getState()
+        const base = st.journey ?? {
+          id: "shot",
+          continent: "Asia" as const,
+          startedAt: Date.now() - 90_000,
+          leg: "puzzle" as const,
+          targetIso: null,
+          usedIsos: [],
+          exploreCorrect: 3,
+          flagsStreak: 3,
+          flagsBest: 3,
+          puzzleLeftoverMs: 0,
+          xpPending: 0,
+          awarded: false,
+          prizeBoxes: [],
+        }
+        useGame.setState({
+          journey: { ...base, leg: "puzzle", exploreCorrect: 3, flagsBest: 3, flagsStreak: 3, awarded: false },
+        })
+        useGame.getState().finishJourneyPuzzle(120, 48_000)
+      },
     }
   }, [])
 
