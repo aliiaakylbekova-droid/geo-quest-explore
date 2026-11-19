@@ -3,6 +3,7 @@ import { GameShell } from "./game/GameShell"
 import { ContinentPick } from "./screens/ContinentPick"
 import { RegisterScreen } from "./screens/RegisterScreen"
 import { useGame, type Stage } from "./store/gameStore"
+import { CompassGlobeWordmark } from "./ui/CompassGlobe"
 
 export default function App() {
   const hydrate = useGame((s) => s.hydrate)
@@ -55,6 +56,19 @@ export default function App() {
       hub: () => useGame.getState().setStage("hub"),
       puzzle: () => useGame.getState().openPuzzle(),
       continent: (id?: string) => useGame.getState().pickContinent(id || "Asia"),
+      journey: (id?: string) => {
+        useGame.getState().openJourneyPick()
+        if (id) useGame.getState().chooseJourneyContinent(id as "Europe" | "Asia" | "Africa" | "North America" | "South America" | "Oceania")
+      },
+      journeyStart: () => useGame.getState().startJourney(),
+      journeyContinue: () => useGame.getState().continueJourney(),
+      journeyTarget: () => useGame.getState().journey?.targetIso ?? null,
+      journeyHit: () => {
+        const iso = useGame.getState().journey?.targetIso
+        if (!iso) return
+        useGame.getState().pick({ iso, lat: 0, lng: 0 })
+      },
+      journeyMiss: () => useGame.getState().pick({ iso: "XX", lat: 0, lng: 0 }),
     }
   }, [])
 
@@ -63,7 +77,7 @@ export default function App() {
   if (!ready) {
     return (
       <div className="boot">
-        <p>GEO QUEST</p>
+        <CompassGlobeWordmark />
       </div>
     )
   }

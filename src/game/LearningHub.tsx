@@ -9,6 +9,7 @@ export function LearningHub() {
   const openDaily = useGame((s) => s.openDaily)
   const playDailyTask = useGame((s) => s.playDailyTask)
   const openPuzzle = useGame((s) => s.openPuzzle)
+  const openJourney = useGame((s) => s.openJourneyPick)
   const ui = t().play
   const photo = `${import.meta.env.BASE_URL}textures/earth-day.jpg`
   const cont = progress.learningContinent
@@ -61,7 +62,10 @@ export function LearningHub() {
         </div>
       ) : null}
       <div className="gq-hub-modes">
-        <button type="button" className="intro-start intro-journey" onClick={() => setStage("explore")}>
+        <button type="button" className="intro-start intro-journey" onClick={() => openJourney()}>
+          {ui.geoJourney}
+        </button>
+        <button type="button" className="btn" onClick={() => setStage("explore")}>
           {ui.explore}
         </button>
         <button

@@ -91,6 +91,7 @@ function progressFromRow(row: Record<string, unknown>): Progress {
     lastQuestDate: String(row.last_quest_date || ""),
     weeklyKey: String(row.weekly_key || ""),
     weekly: Array.isArray(row.weekly) ? (row.weekly as Progress["weekly"]) : [],
+    journeyAwarded: Array.isArray(row.journey_awarded) ? (row.journey_awarded as string[]) : [],
   }
 }
 

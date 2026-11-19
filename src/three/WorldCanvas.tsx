@@ -41,7 +41,7 @@ function useGameScrollLock() {
     const block = (event: TouchEvent) => {
       const target = event.target
       if (!(target instanceof Element)) return
-      if (target.closest(".gq-tutorial-card, .intro-card, .hud-nav-sheet, .hud-bottom, .hud-top, .gq-puzzle, .gq-hub, .gq-continent-pick, input, select, textarea")) return
+      if (target.closest(".gq-tutorial-card, .intro-card, .hud-nav-sheet, .hud-bottom, .hud-top, .gq-puzzle, .gq-hub, .gq-continent-pick, .gq-journey-overlay, .gq-journey-ind, input, select, textarea")) return
       if (target.closest("canvas, .world-canvas, .hud-center")) event.preventDefault()
     }
     document.addEventListener("touchmove", block, { passive: false })

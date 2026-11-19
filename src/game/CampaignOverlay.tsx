@@ -55,9 +55,11 @@ export function CampaignOverlay() {
   const missKey = `${lastHit?.lat}-${lastHit?.lng}-${lastFeedback?.ok}`
   const missFlash = screenFlash === "red" || hitTint === "red" || flagMoment === "lose"
   const ui = t().play
+  const journey = useGame((s) => s.journey)
   void useGame((s) => s.progress.locale)
 
   if (stage === "discover") return null
+  if (journey && (journey.leg === "inter-flags" || journey.leg === "inter-puzzle" || journey.leg === "pick" || journey.leg === "results")) return null
   if (phase === "timeout") {
     return (
       <div className="gq-timeout-end" data-result="timeout">

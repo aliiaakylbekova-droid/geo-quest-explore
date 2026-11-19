@@ -38,6 +38,12 @@ declare global {
       hub?: () => void
       puzzle?: () => void
       continent?: (id?: string) => void
+      journey?: (id?: string) => void
+      journeyStart?: () => void
+      journeyContinue?: () => void
+      journeyTarget?: () => string | null
+      journeyHit?: () => void
+      journeyMiss?: () => void
     }
   }
 }

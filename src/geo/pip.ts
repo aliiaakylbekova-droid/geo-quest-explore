@@ -1,6 +1,6 @@
 export type Ring = number[][]
 
-function ringContains(ring: Ring, lng: number, lat: number) {
+export function ringContains(ring: Ring, lng: number, lat: number) {
   let inside = false
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
     const xi = ring[i][0]

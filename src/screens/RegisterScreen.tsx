@@ -3,6 +3,7 @@ import { audio } from "../audio/AudioManager"
 import { GlobeMap } from "../game/GlobeMap"
 import { t } from "../i18n"
 import { useGame } from "../store/gameStore"
+import { CompassGlobeWordmark } from "../ui/CompassGlobe"
 
 function tryStartMusic() {
   audio.unlock()
@@ -50,7 +51,9 @@ export function RegisterScreen() {
           goJourney()
         }}
       >
-        <p className="kicker">{ui.geoGame}</p>
+        <p className="kicker">
+          <CompassGlobeWordmark />
+        </p>
         <h1>{ui.beginGame}</h1>
         <p className="intro-lead">{ui.askName}</p>
         <input

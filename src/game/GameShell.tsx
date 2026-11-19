@@ -4,7 +4,7 @@ import { audio } from "../audio/AudioManager"
 import { TutorialOverlay, tutorialDone } from "../screens/TutorialOverlay"
 import { ACHIEVEMENTS } from "../data/achievements"
 import { GEO_CAMPAIGN } from "../data/campaign"
-import { CONTINENT_RU } from "../data/continents"
+import { CONTINENT_RU, type LearningContinent } from "../data/continents"
 import { CONTINENTS, shiftDate, todayKey } from "../data/daily"
 import { LANDMARKS, NEIGHBORS, getCatalog, loadCatalog } from "../geo/catalog"
 import { formatClock } from "./logic"
@@ -12,9 +12,11 @@ import { CampaignOverlay } from "./CampaignOverlay"
 import { DifficultyDock } from "./DifficultyDock"
 import { filterCountryPool } from "./difficulty"
 import { HintLadder } from "./MissionHints"
+import { GeoJourneyLayer } from "./GeoJourney"
 import { LearningHub } from "./LearningHub"
 import { MapPuzzle } from "./MapPuzzle"
 import { t } from "../i18n"
+import { CompassGlobeWordmark } from "../ui/CompassGlobe"
 import { FLAG_MODES, STORY_MISSIONS, type StoryMission } from "./storyMissions"
 import { ContinentPick } from "../screens/ContinentPick"
 import { StageView } from "../three/StageView"
@@ -93,6 +95,8 @@ export function GameShell() {
   const openDaily = useGame((s) => s.openDaily)
   const playDailyTask = useGame((s) => s.playDailyTask)
   const openPuzzle = useGame((s) => s.openPuzzle)
+  const journey = useGame((s) => s.journey)
+  const finishJourneyPuzzle = useGame((s) => s.finishJourneyPuzzle)
   const clearToast = useGame((s) => s.clearToast)
   const roundRules = useGame((s) => s.roundRules)
   const hideNames = (stage === "mission" || Boolean(campaign)) && Boolean(roundRules) && !roundRules.showNames
@@ -107,7 +111,7 @@ export function GameShell() {
   const exitToPlaque = useGame((s) => s.exitToPlaque)
   const lastTickSec = useRef<number | null>(null)
   const left = useTick(missionEndsAt)
-  const clockOn = Boolean(missionEndsAt) && (Boolean(campaign) || stage === "flag" || stage === "mission")
+  const clockOn = Boolean(missionEndsAt) && !journey && (Boolean(campaign) || stage === "flag" || stage === "mission")
 
   function requestExit() {
     setMoreOpen(false)
@@ -164,12 +168,13 @@ export function GameShell() {
   const flagPool = useMemo(() => {
     const all = getCatalog()?.countries.filter((c) => c.iso.length === 2 && c.continent !== "Antarctica") ?? []
     const filtered = filterCountryPool(all, progress.difficulty)
-    const home = progress.learningContinent
+    const home = journey?.continent || progress.learningContinent
     const scoped = home ? filtered.filter((c) => c.continent === home) : filtered
     return scoped.length >= 6 ? scoped : filtered.length ? filtered : all
-  }, [stage, selectedIso, progress.learningContinent, progress.difficulty])
+  }, [stage, selectedIso, progress.learningContinent, progress.difficulty, journey?.continent])
 
   function newFlagRound(kind: (typeof FLAG_MODES)[number] = "flag") {
+    if (useGame.getState().journey) return
     const pool = flagPool.length ? flagPool : [{ iso: "KG", name: "Кыргызстан", capital: "Бишкек", lat: 41.2, lng: 74.6, continent: "Asia", a3: "KGZ", nameEn: "Kyrgyzstan", subregion: "", pop: 0 }]
     const c = pool[Math.floor(Math.random() * pool.length)]
     const neighbors = (NEIGHBORS[c.iso] || []).map((iso) => getCatalog()?.byIso.get(iso)?.name ?? iso).join(", ")
@@ -262,6 +267,7 @@ export function GameShell() {
       return
     }
     if (mission?.kind === "flag" && mission.targetIso) setFlagRound(mission)
+    else if (journey) setFlagRound(mission)
     else if (!mission || (mission.kind !== "flag" && !mission.id.startsWith("daily-"))) newFlagRound("flag")
   }, [stage, mission?.id, mission?.kind])
 
@@ -273,7 +279,7 @@ export function GameShell() {
 
   useEffect(() => {
     if (stage !== "flag" || !lastFeedback?.ok || !mission) return
-    if (mission.id.startsWith("daily-")) return
+    if (mission.id.startsWith("daily-") || mission.id.startsWith("journey-")) return
     const id = window.setTimeout(() => newFlagRound("flag"), 4200)
     return () => window.clearTimeout(id)
   }, [stage, lastFeedback?.ok, mission?.id])
@@ -362,7 +368,7 @@ export function GameShell() {
       {screenFlash === "red" ? <div className="gq-flash-red" aria-hidden /> : null}
       <header className="hud-top">
         <div className="brand">
-          <strong>GEO QUEST</strong>
+          <CompassGlobeWordmark compact />
           <span className="pilot">{profile?.name}</span>
         </div>
         {clockOn ? (
@@ -422,14 +428,22 @@ export function GameShell() {
                 <span>{ui.goal}</span>
                 {mission.goal}
               </p>
-              <p className="xp-reward">+{mission.xp} XP</p>
+              {mission.xp ? <p className="xp-reward">+{mission.xp} XP</p> : null}
             </>
           ) : null}
           {stage === "explore" ? (
             <p className="goal">
               <span>{ui.goal}</span>
-              Изучи территорию. Двойной клик по стране — подлёт. Имена крупнее вдали, мельче вблизи.
+              {journey?.leg === "explore" && journey.targetIso
+                ? ui.findCountry.replace("{name}", countryName(journey.targetIso))
+                : "Изучи территорию. Двойной клик по стране — подлёт. Имена крупнее вдали, мельче вблизи."}
             </p>
+          ) : null}
+          {journey?.leg === "explore" ? (
+            <p className="xp-reward">{ui.exploreCount.replace("{n}", String(journey.exploreCorrect))}</p>
+          ) : null}
+          {journey?.leg === "flags" ? (
+            <p className="xp-reward">{ui.flagsStreak.replace("{n}", String(journey.flagsStreak))}</p>
           ) : null}
           {stage === "hub" ? (
             <p className="goal">
@@ -472,7 +486,8 @@ export function GameShell() {
           ) : null}
           {stage === "journal" ? (
             <div className="gq-collection">
-              <p className="tiny">
+              <p className="tiny gq-awards-head">
+                <CompassGlobeWordmark compact />
                 {ui.opened}: {progress.visited.length} · {ui.loginStreak}: {progress.loginStreak}
               </p>
               <div className="gq-cont-list">
@@ -587,16 +602,16 @@ export function GameShell() {
             {flagRound.kind !== "flag" ? <p className="tiny">{flagRound.story}</p> : null}
           </div>
         ) : null}
-        {campaign && campaignPhase === "play" ? (
+        {campaign && campaignPhase === "play" && !journey ? (
           <div className="timer-xl" key={campaign.id}>
             {formatClock(left)}
           </div>
-        ) : (stage === "mission" || stage === "flag") && mission && !campaign ? (
+        ) : (stage === "mission" || stage === "flag") && mission && !campaign && !journey ? (
           <div className="timer-xl" key={mission.id}>
             {formatClock(left)}
           </div>
         ) : (
-          <div className="timer-idle">{campaign ? ui.missions : ui.explore}</div>
+          <div className="timer-idle">{journey ? ui.geoJourney : campaign ? ui.missions : ui.explore}</div>
         )}
         <DifficultyDock />
         <div className="stat-stack">
@@ -673,7 +688,17 @@ export function GameShell() {
 
       <main className="hud-center">
         {stage === "puzzle" ? (
-          <MapPuzzle />
+          journey?.leg === "puzzle" ? (
+            <MapPuzzle
+              lockedContinent={journey.continent as LearningContinent}
+              lockedDiff="easy"
+              hideChrome
+              skipXp
+              onComplete={(xp, leftover) => finishJourneyPuzzle(xp, leftover)}
+            />
+          ) : (
+            <MapPuzzle />
+          )
         ) : (
         <StageView
           discover={discover}
@@ -694,7 +719,7 @@ export function GameShell() {
           }}
         />
         )}
-        {stage === "hub" ? <LearningHub /> : null}
+        {stage === "hub" && !journey ? <LearningHub /> : null}
         {!hideNames && hoverTip ? (
           <div className="gq-tip" style={{ left: hoverTip.x, top: hoverTip.y }}>
             <span>{hoverTip.name}</span>
@@ -878,7 +903,7 @@ export function GameShell() {
             </svg>
             <span>{ui.profile}</span>
           </button>
-          {(stage === "mission" || stage === "flag") && mission ? (
+          {(stage === "mission" || stage === "flag") && mission && !journey ? (
             <button
               type="button"
               className="ghost"
@@ -939,6 +964,7 @@ export function GameShell() {
           </article>
         </div>
       ) : null}
+      <GeoJourneyLayer />
       <CampaignOverlay />
       {introPhase === "ready" && coach ? <TutorialOverlay onDone={() => setCoach(false)} /> : null}
       {changeCont ? (

@@ -23,4 +23,5 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: "asia-12", title: "Азия", hint: "Открой 12 стран Азии." },
   { id: "puzzle-asia", title: "Пазл Азии", hint: "Собери карту Азии на лёгком уровне." },
   { id: "puzzle-first", title: "Картограф-сборщик", hint: "Собери любой материк в MAP PUZZLE." },
+  { id: "journey-first", title: "Путешественник", hint: "Пройди GEO JOURNEY на одном материке." },
 ]

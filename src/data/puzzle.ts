@@ -1,16 +1,26 @@
+import { ringContains } from "../geo/pip"
 import { isoOf, NEIGHBORS, type CountryRecord } from "../geo/catalog"
 import { LEARNING_CONTINENTS, type LearningContinent } from "./continents"
 
-export const ATLAS_PALETTE = [
-  "#e07a6a",
-  "#8fd9b6",
-  "#c5b4e8",
-  "#f0d56a",
-  "#f08a4a",
-  "#4ec5c1",
-  "#e8a0c0",
-  "#9dcc7a",
+/** Earth-tone atlas: olive, sand, brown, muted green. Gold is reserved for selection. */
+export const TERRAIN_PALETTE = [
+  "#6e7f55",
+  "#c4b48a",
+  "#8b7355",
+  "#7d8b6e",
+  "#b89a6a",
+  "#5f6e48",
+  "#a89070",
+  "#8a9a68",
+  "#d2c09a",
+  "#9a7a52",
 ] as const
+
+export const ATLAS_PALETTE = TERRAIN_PALETTE
+
+export const OCEAN_DEEP = "#15232e"
+export const OCEAN_SHELF = "#1c303c"
+export const GOLD_SELECT = "#e8c547"
 
 export type PuzzleDiff = "easy" | "medium" | "hard"
 
@@ -117,6 +127,7 @@ export type PuzzlePiece = {
   y0: number
   x1: number
   y1: number
+  rings: [number, number][][]
 }
 
 function hashIso(iso: string) {
@@ -152,10 +163,10 @@ export function colorAtlas(pieces: PuzzlePiece[]): PuzzlePiece[] {
   const chosen = new Map<string, string>()
   for (const p of order) {
     const used = new Set([...graph.get(p.iso)!].map((iso) => chosen.get(iso)).filter(Boolean) as string[])
-    const start = hashIso(p.iso) % ATLAS_PALETTE.length
-    let color = ATLAS_PALETTE[start]
-    for (let k = 0; k < ATLAS_PALETTE.length; k += 1) {
-      const cand = ATLAS_PALETTE[(start + k) % ATLAS_PALETTE.length]
+    const start = hashIso(p.iso) % TERRAIN_PALETTE.length
+    let color = TERRAIN_PALETTE[start]
+    for (let k = 0; k < TERRAIN_PALETTE.length; k += 1) {
+      const cand = TERRAIN_PALETTE[(start + k) % TERRAIN_PALETTE.length]
       if (!used.has(cand)) {
         color = cand
         break
@@ -186,11 +197,12 @@ export function piecesFromFeatures(
       d: built.d,
       cx: built.cx,
       cy: built.cy,
-      color: ATLAS_PALETTE[hashIso(iso) % ATLAS_PALETTE.length],
+      color: TERRAIN_PALETTE[hashIso(iso) % TERRAIN_PALETTE.length],
       x0: built.x0,
       y0: built.y0,
       x1: built.x1,
       y1: built.y1,
+      rings: built.rings,
     })
   }
   return colorAtlas(out)
@@ -199,7 +211,7 @@ export function piecesFromFeatures(
 function pathFromFeature(feature: GeoJSON.Feature, box: PuzzleBounds) {
   const geom = feature.geometry
   if (!geom || (geom.type !== "Polygon" && geom.type !== "MultiPolygon")) {
-    return { d: "", cx: 0, cy: 0, n: 0, x0: 0, y0: 0, x1: 0, y1: 0 }
+    return { d: "", cx: 0, cy: 0, n: 0, x0: 0, y0: 0, x1: 0, y1: 0, rings: [] as [number, number][][] }
   }
   const polygons = geom.type === "Polygon" ? [geom.coordinates] : geom.coordinates
   let d = ""
@@ -210,12 +222,14 @@ function pathFromFeature(feature: GeoJSON.Feature, box: PuzzleBounds) {
   let y0 = Infinity
   let x1 = -Infinity
   let y1 = -Infinity
+  const rings: [number, number][][] = []
   for (const poly of polygons) {
     const ring = unwrapRing((poly[0] || []) as number[][])
     if (ring.length < 3) continue
     const midLng = ring.reduce((a, p) => a + p[0], 0) / ring.length
     const midLat = ring.reduce((a, p) => a + p[1], 0) / ring.length
     if (midLng < box.west - 8 || midLng > box.east + 8 || midLat < box.south - 8 || midLat > box.north + 8) continue
+    const projected: [number, number][] = []
     ring.forEach(([lng, lat], i) => {
       const p = project(lng, lat, box)
       d += `${i ? "L" : "M"}${p.x.toFixed(2)},${p.y.toFixed(2)}`
@@ -226,8 +240,48 @@ function pathFromFeature(feature: GeoJSON.Feature, box: PuzzleBounds) {
       y0 = Math.min(y0, p.y)
       x1 = Math.max(x1, p.x)
       y1 = Math.max(y1, p.y)
+      projected.push([p.x, p.y])
     })
     d += "Z"
+    rings.push(projected)
   }
-  return { d, cx: n ? sx / n : 0, cy: n ? sy / n : 0, n, x0: Number.isFinite(x0) ? x0 : 0, y0: Number.isFinite(y0) ? y0 : 0, x1: Number.isFinite(x1) ? x1 : 0, y1: Number.isFinite(y1) ? y1 : 0 }
+  return { d, cx: n ? sx / n : 0, cy: n ? sy / n : 0, n, x0: Number.isFinite(x0) ? x0 : 0, y0: Number.isFinite(y0) ? y0 : 0, x1: Number.isFinite(x1) ? x1 : 0, y1: Number.isFinite(y1) ? y1 : 0, rings }
+}
+
+/** Same projection as the board: screen client → map viewBox. */
+export function clientToMap(rect: DOMRect, clientX: number, clientY: number, w = PUZZLE_SIZE.w, h = PUZZLE_SIZE.h) {
+  if (!rect.width || !rect.height) return { x: 0, y: 0, scaleX: 1, scaleY: 1 }
+  const scaleX = w / rect.width
+  const scaleY = h / rect.height
+  return {
+    x: (clientX - rect.left) * scaleX,
+    y: (clientY - rect.top) * scaleY,
+    scaleX,
+    scaleY,
+  }
+}
+
+export function mapToClient(rect: DOMRect, x: number, y: number, w = PUZZLE_SIZE.w, h = PUZZLE_SIZE.h) {
+  return {
+    x: rect.left + (x / w) * rect.width,
+    y: rect.top + (y / h) * rect.height,
+    scaleX: rect.width / w,
+    scaleY: rect.height / h,
+  }
+}
+
+/** Islands: any outer ring. Elongated: pip on the silhouette, not the vertex centroid. */
+export function pieceHit(piece: PuzzlePiece, x: number, y: number) {
+  const pad = 14
+  const inBox = x >= piece.x0 - pad && x <= piece.x1 + pad && y >= piece.y0 - pad && y <= piece.y1 + pad
+  if (inBox) {
+    for (const ring of piece.rings) {
+      if (ring.length >= 3 && ringContains(ring, x, y)) return true
+    }
+  }
+  const span = Math.max(piece.x1 - piece.x0, piece.y1 - piece.y0, 18)
+  const rad = Math.min(58, Math.max(20, span * 0.16))
+  const dx = x - piece.cx
+  const dy = y - piece.cy
+  return dx * dx + dy * dy <= rad * rad
 }

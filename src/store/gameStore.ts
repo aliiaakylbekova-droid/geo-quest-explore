@@ -12,6 +12,17 @@ import {
   type ContinentStat,
   type WeeklyChallenge,
 } from "../data/learning"
+import {
+  JOURNEY_EXPLORE_GOAL,
+  JOURNEY_FLAGS_GOAL,
+  journeyXp,
+  makeJourney,
+  readJourneySession,
+  writeJourneySession,
+  type Journey,
+  type JourneyLeg,
+} from "../data/journey"
+import { LEARNING_CONTINENTS, type LearningContinent } from "../data/continents"
 import { countryNameOf, continentOf, evaluateLevel, evaluateMission } from "../geo/hitTest"
 import { getCatalog, LANDMARKS } from "../geo/catalog"
 import { costForHint, rulesFor, type RoundRules } from "../game/difficulty"
@@ -94,6 +105,7 @@ export type Progress = {
   lastQuestDate: string
   weeklyKey: string
   weekly: WeeklyChallenge[]
+  journeyAwarded: string[]
 }
 
 const defaultProgress = (): Progress => ({
@@ -132,6 +144,7 @@ const defaultProgress = (): Progress => ({
   lastQuestDate: "",
   weeklyKey: "",
   weekly: [],
+  journeyAwarded: [],
 })
 
 function ensureDaily(progress: Progress): Progress {
@@ -216,6 +229,7 @@ function achievementIdsFor(progress: Progress) {
   if (progress.questStreak >= 3) ids.push("login-3")
   if (progress.puzzleDone.length >= 1) ids.push("puzzle-first")
   if (progress.puzzleDone.includes("Asia:easy")) ids.push("puzzle-asia")
+  if (progress.journeyAwarded.length >= 1) ids.push("journey-first")
   if (progress.missionsDone.length >= 1) ids.push("first-mission")
   const asia = progress.visited.filter((iso) => continentOf(iso) === "Asia").length
   if (asia >= 12) ids.push("asia-12")
@@ -263,6 +277,8 @@ type GameState = {
   pulseIsos: string[]
   pulseCenter: { lat: number; lng: number } | null
   missionSummary: { title: string; recap: string; xp: number; streak: number; coins: number } | null
+  journey: Journey | null
+  journeyPick: LearningContinent | null
   hydrate: () => Promise<void>
   register: (name: string, avatar: string) => Promise<void>
   finishIntro: () => void
@@ -301,7 +317,53 @@ type GameState = {
   clearToast: () => void
   pickContinent: (continent: string) => void
   openPuzzle: () => void
-  completePuzzle: (key: string, xp: number) => void
+  completePuzzle: (key: string, xp: number, opts?: { skipXp?: boolean }) => void
+  openJourneyPick: () => void
+  chooseJourneyContinent: (continent: LearningContinent) => void
+  startJourney: () => void
+  continueJourney: () => void
+  finishJourneyPuzzle: (xp: number, leftoverMs: number) => void
+  replayJourney: () => void
+  otherJourneyContinent: () => void
+  exitJourney: () => void
+  resolveJourneyPick: (hit: { iso: string | null; lat: number; lng: number }, name: string | null, visited: string[]) => void
+  awardJourney: (draft: Journey) => void
+  resumeJourney: () => void
+}
+
+function continentPool(continent: string) {
+  return (getCatalog()?.countries ?? []).filter((c) => c.continent === continent && c.iso.length === 2)
+}
+
+function nextJourneyIso(journey: Journey) {
+  const pool = continentPool(journey.continent).filter((c) => !journey.usedIsos.includes(c.iso))
+  const src = pool.length ? pool : continentPool(journey.continent)
+  if (!src.length) return null
+  return src[Math.floor(Math.random() * src.length)].iso
+}
+
+function journeyFlagMission(iso: string): StoryMission {
+  const rec = getCatalog()?.byIso.get(iso)
+  const name = rec?.name ?? iso
+  return {
+    id: `journey-flag-${iso}-${Date.now()}`,
+    kind: "flag",
+    title: t().play.journeyFlags,
+    story: t().play.clickFlag,
+    goal: t().play.clickFlag,
+    hint: rec?.continent ?? "",
+    recap: name,
+    timeMs: 0,
+    xp: 0,
+    targetIso: iso,
+    targetName: name,
+    lat: rec?.lat ?? 0,
+    lng: rec?.lng ?? 0,
+  }
+}
+
+function persistJourney(journey: Journey | null) {
+  writeJourneySession(journey)
 }
 
 async function persist(progress: Progress, profile?: Profile | null) {
@@ -349,6 +411,8 @@ export const useGame = create<GameState>((set, get) => ({
   roundRules: null,
   ...HINT_RESET,
   missionSummary: null,
+  journey: null,
+  journeyPick: null,
 
   hydrate: async () => {
     try {
@@ -366,6 +430,7 @@ export const useGame = create<GameState>((set, get) => ({
       if (!Array.isArray(progress.flagUnlocked)) progress = { ...progress, flagUnlocked: [] }
       if (!progress.continentStats || typeof progress.continentStats !== "object") progress = { ...progress, continentStats: {} }
       if (!Array.isArray(progress.puzzleDone)) progress = { ...progress, puzzleDone: [] }
+      if (!Array.isArray(progress.journeyAwarded)) progress = { ...progress, journeyAwarded: [] }
       if (!Array.isArray(progress.weekly)) progress = { ...progress, weekly: [] }
       if (typeof progress.learningContinent !== "string") progress = { ...progress, learningContinent: "" }
       progress = ensureWeekly(progress)
@@ -392,6 +457,7 @@ export const useGame = create<GameState>((set, get) => ({
       audio.setSfx(progress.sfxOn)
       audio.setMusicVol(progress.musicVol)
       audio.setSfxVol(progress.sfxVol)
+      const savedJourney = readJourneySession()
       set({
         profile: nextProfile,
         progress,
@@ -399,6 +465,8 @@ export const useGame = create<GameState>((set, get) => ({
         ready: true,
         stage: "register",
         introPhase: "card",
+        journey: savedJourney,
+        journeyPick: savedJourney?.continent ?? null,
       })
     } catch {
       set({ ready: true, stage: "register", progress: defaultProgress(), introPhase: "card" })
@@ -428,6 +496,7 @@ export const useGame = create<GameState>((set, get) => ({
   finishIntro: () => {
     if (get().introPhase === "ready") return
     set({ introPhase: "ready" })
+    get().resumeJourney()
   },
 
   setStage: (stage) => {
@@ -477,6 +546,11 @@ export const useGame = create<GameState>((set, get) => ({
     let progress = { ...st.progress, visited }
     const name = countryNameOf(hit.iso)
     void persist(progress)
+
+    if (st.journey && (st.journey.leg === "explore" || st.journey.leg === "flags")) {
+      get().resolveJourneyPick(hit, name, visited)
+      return
+    }
 
     const useFlag = st.stage === "flag" && st.mission
     const useStory = !useFlag && st.mission && st.stage === "mission" && !st.campaign
@@ -765,8 +839,11 @@ export const useGame = create<GameState>((set, get) => ({
   exitToPlaque: () => {
     window.clearTimeout(autoAdvanceTimer)
     clearFlagFlow()
+    persistJourney(null)
     set({
       stage: "register",
+      journey: null,
+      journeyPick: null,
       introPhase: "card",
       campaign: null,
       campaignPhase: "play",
@@ -995,26 +1072,374 @@ export const useGame = create<GameState>((set, get) => ({
     })
   },
 
-  completePuzzle: (key, xp) => {
+  completePuzzle: (key, xp, opts) => {
     let progress = get().progress
     const first = !progress.puzzleDone.includes(key)
-    const gained = first ? xp : Math.round(xp * 0.35)
+    const skipXp = Boolean(opts?.skipXp)
+    const gained = skipXp ? 0 : first ? xp : Math.round(xp * 0.35)
     progress = {
       ...progress,
       puzzleDone: first ? [...progress.puzzleDone, key] : progress.puzzleDone,
       xp: progress.xp + gained,
-      coins: progress.coins + (first ? 25 : 8),
+      coins: progress.coins + (skipXp ? 0 : first ? 25 : 8),
       continentXp: progress.continentXp + gained,
     }
-    progress = bumpWeekly(progress, "w-puzzle")
+    if (!skipXp) progress = bumpWeekly(progress, "w-puzzle")
     progress = grantMany(progress, achievementIdsFor(progress))
-    audio.play("success")
-    audio.play("discovery")
+    if (!skipXp) {
+      audio.play("success")
+      audio.play("discovery")
+    }
     set({
       progress,
       displayXp: progress.xp,
-      toast: { text: t().play.puzzleWin, kind: first ? "ach" : "xp" },
-      rewardPulse: gained,
+      toast: skipXp ? get().toast : { text: t().play.puzzleWin, kind: first ? "ach" : "xp" },
+      rewardPulse: skipXp ? 0 : gained,
+    })
+    void persist(progress)
+  },
+
+  openJourneyPick: () => {
+    const existing = get().journey
+    if (existing && !existing.awarded && existing.leg !== "pick") {
+      get().resumeJourney()
+      return
+    }
+    audio.play("transition")
+    set({
+      stage: "hub",
+      journey: { ...makeJourney("Europe"), leg: "pick" },
+      journeyPick: null,
+      campaign: null,
+      mission: null,
+      missionEndsAt: null,
+    })
+  },
+
+  chooseJourneyContinent: (continent) => {
+    set({ journeyPick: continent })
+  },
+
+  startJourney: () => {
+    const continent = get().journeyPick
+    if (!continent || !(LEARNING_CONTINENTS as readonly string[]).includes(continent)) return
+    const journey = makeJourney(continent)
+    const targetIso = nextJourneyIso(journey)
+    const next = { ...journey, targetIso, usedIsos: targetIso ? [targetIso] : [] }
+    persistJourney(next)
+    audio.play("start")
+    audio.play("transition")
+    set({
+      journey: next,
+      stage: "explore",
+      mission: null,
+      missionEndsAt: null,
+      campaign: null,
+      lastFeedback: null,
+      selectedIso: null,
+      highlightIso: targetIso,
+      flagFillIso: null,
+      flagMoment: null,
+      screenFlash: null,
+      roundRules: { ...rulesFor("easy", "mission"), showNames: true, missPenalty: 0 },
+      flyTo: CONTINENT_FLY[continent] ?? { lat: 25, lng: 12, dist: 6.2 },
+    })
+  },
+
+  continueJourney: () => {
+    const j = get().journey
+    if (!j) return
+    if (j.leg === "inter-flags") {
+      const targetIso = nextJourneyIso(j)
+      const next: Journey = { ...j, leg: "flags", targetIso, usedIsos: targetIso ? [...j.usedIsos, targetIso] : j.usedIsos, flagsStreak: 0 }
+      persistJourney(next)
+      audio.play("transition")
+      set({
+        journey: next,
+        stage: "flag",
+        mission: targetIso ? journeyFlagMission(targetIso) : null,
+        missionEndsAt: null,
+        lastFeedback: null,
+        selectedIso: null,
+        highlightIso: null,
+        lastCountryName: null,
+        flagFillIso: null,
+        flagMoment: null,
+        roundRules: { ...rulesFor("easy", "mission"), showNames: false, missPenalty: 0 },
+        flyTo: CONTINENT_FLY[j.continent] ?? get().flyTo,
+      })
+      return
+    }
+    if (j.leg === "inter-puzzle") {
+      const next: Journey = { ...j, leg: "puzzle" }
+      persistJourney(next)
+      audio.play("transition")
+      set({
+        journey: next,
+        stage: "puzzle",
+        mission: null,
+        missionEndsAt: null,
+        lastFeedback: null,
+        flagMoment: null,
+        flagFillIso: null,
+      })
+    }
+  },
+
+  finishJourneyPuzzle: (_xp, leftoverMs) => {
+    const j = get().journey
+    if (!j || j.leg !== "puzzle" || j.awarded) return
+    const next: Journey = { ...j, leg: "results", puzzleLeftoverMs: leftoverMs, xpPending: journeyXp({ ...j, puzzleLeftoverMs: leftoverMs }) }
+    get().awardJourney(next)
+  },
+
+  replayJourney: () => {
+    const continent = get().journey?.continent ?? get().journeyPick
+    if (!continent) return
+    set({ journeyPick: continent, journey: { ...makeJourney(continent), leg: "pick" } })
+    get().startJourney()
+  },
+
+  otherJourneyContinent: () => {
+    persistJourney(null)
+    set({
+      journey: { ...makeJourney("Europe"), leg: "pick" },
+      journeyPick: null,
+      stage: "hub",
+      mission: null,
+      missionEndsAt: null,
+    })
+  },
+
+  exitJourney: () => {
+    persistJourney(null)
+    clearFlagFlow()
+    set({
+      journey: null,
+      journeyPick: null,
+      stage: "hub",
+      mission: null,
+      missionEndsAt: null,
+      lastFeedback: null,
+      flagMoment: null,
+      flagFillIso: null,
+      campaign: null,
+    })
+  },
+
+  resolveJourneyPick: (hit, name, visited) => {
+    const st = get()
+    const j = st.journey
+    if (!j || (j.leg !== "explore" && j.leg !== "flags")) return
+    const ok = Boolean(j.targetIso && hit.iso === j.targetIso)
+    const progress = { ...st.progress, visited }
+    if (ok) {
+      audio.play("success")
+      audio.play("discovery")
+      if (j.leg === "explore") {
+        const exploreCorrect = j.exploreCorrect + 1
+        const done = exploreCorrect >= JOURNEY_EXPLORE_GOAL
+        const next: Journey = {
+          ...j,
+          exploreCorrect,
+          targetIso: j.targetIso,
+          usedIsos: j.usedIsos,
+          leg: "explore",
+        }
+        if (!done) {
+          const iso = nextJourneyIso({ ...j, usedIsos: j.usedIsos })
+          next.targetIso = iso
+          next.usedIsos = iso ? [...j.usedIsos, iso] : j.usedIsos
+        }
+        persistJourney(next)
+        set({
+          journey: next,
+          progress,
+          selectedIso: hit.iso,
+          highlightIso: done ? hit.iso : next.targetIso,
+          lastHit: hit,
+          lastCountryName: name,
+          hitTint: "gold",
+          lastFeedback: { ok: true, text: t().play.verdictOk },
+          flyTo: hit.iso ? { lat: hit.lat, lng: hit.lng, dist: 3.4 } : st.flyTo,
+        })
+        if (done) {
+          window.setTimeout(() => {
+            if (get().journey?.id !== j.id) return
+            const follow: Journey = { ...next, leg: "inter-flags", targetIso: null }
+            persistJourney(follow)
+            set({ journey: follow, hitTint: null })
+          }, 900)
+        }
+        return
+      }
+      const flagsStreak = j.flagsStreak + 1
+      const flagsBest = Math.max(j.flagsBest, flagsStreak)
+      const done = flagsStreak >= JOURNEY_FLAGS_GOAL
+      const fillable = canFlagFill(hit.iso)
+      const alreadyFilled = Boolean(fillable && hit.iso && progress.flagUnlocked.includes(hit.iso))
+      const flagUnlocked =
+        fillable && hit.iso && !progress.flagUnlocked.includes(hit.iso)
+          ? [...progress.flagUnlocked, hit.iso]
+          : progress.flagUnlocked
+      const scored = { ...progress, flagUnlocked }
+      const next: Journey = {
+        ...j,
+        flagsStreak,
+        flagsBest,
+        targetIso: j.targetIso,
+        leg: "flags",
+      }
+      persistJourney(next)
+      void persist(scored)
+      const missionId = st.mission?.id
+      clearFlagFlow()
+      set({
+        journey: next,
+        progress: scored,
+        selectedIso: hit.iso,
+        highlightIso: hit.iso,
+        lastHit: hit,
+        lastCountryName: null,
+        hitTint: "gold",
+        flagFillIso: fillable && alreadyFilled ? hit.iso : null,
+        flagMoment: null,
+        lastFeedback: { ok: true, text: t().play.verdictOk },
+        flyTo: hit.iso ? { lat: hit.lat, lng: hit.lng, dist: 3.15 } : st.flyTo,
+      })
+      const fillDelay = alreadyFilled || !fillable ? 80 : 280
+      flagFlowTimers.push(
+        window.setTimeout(() => {
+          if (get().journey?.id !== j.id) return
+          set({ flagFillIso: fillable ? hit.iso : null })
+        }, fillDelay),
+      )
+      flagFlowTimers.push(
+        window.setTimeout(() => {
+          if (get().journey?.id !== j.id) return
+          set({ lastCountryName: name, flagMoment: "win" })
+        }, fillDelay + 900),
+      )
+      if (!done) {
+        flagFlowTimers.push(
+          window.setTimeout(() => {
+            if (get().journey?.id !== j.id || get().journey?.leg !== "flags") return
+            const iso = nextJourneyIso(next)
+            const follow: Journey = { ...next, targetIso: iso, usedIsos: iso ? [...next.usedIsos, iso] : next.usedIsos }
+            persistJourney(follow)
+            set({
+              journey: follow,
+              mission: iso ? journeyFlagMission(iso) : null,
+              lastFeedback: null,
+              flagMoment: null,
+              lastCountryName: null,
+              selectedIso: null,
+              highlightIso: null,
+              flagFillIso: get().flagFillIso,
+            })
+          }, fillDelay + 2200),
+        )
+      } else {
+        flagFlowTimers.push(
+          window.setTimeout(() => {
+            if (get().journey?.id !== j.id) return
+            const follow: Journey = { ...next, leg: "inter-puzzle", targetIso: null }
+            persistJourney(follow)
+            set({ journey: follow, flagMoment: null })
+          }, fillDelay + 1800),
+        )
+      }
+      void missionId
+      return
+    }
+    audio.play("fail")
+    const brokenStreak = j.leg === "flags" ? 0 : j.flagsStreak
+    const next: Journey = { ...j, flagsStreak: brokenStreak }
+    persistJourney(next)
+    clearFlagFlow()
+    set({
+      journey: next,
+      progress,
+      selectedIso: j.leg === "flags" ? null : hit.iso,
+      lastHit: hit,
+      lastCountryName: j.leg === "flags" ? null : name,
+      hitTint: "red",
+      screenFlash: "red",
+      flagMoment: j.leg === "flags" ? "lose" : st.flagMoment,
+      lastFeedback: { ok: false, text: j.leg === "flags" ? t().play.flagWrong : t().play.tryElsewhere },
+    })
+    window.setTimeout(() => {
+      if (get().screenFlash === "red") set({ screenFlash: null })
+    }, 1150)
+    window.setTimeout(() => {
+      if (get().hitTint !== "red") return
+      set({ hitTint: null, flagMoment: get().flagMoment === "lose" ? null : get().flagMoment })
+    }, 1200)
+  },
+
+  resumeJourney: () => {
+    const j = get().journey
+    if (!j || j.awarded || j.leg === "pick") return
+    const fly = CONTINENT_FLY[j.continent] ?? get().flyTo
+    if (j.leg === "explore") {
+      set({
+        stage: "explore",
+        mission: null,
+        missionEndsAt: null,
+        highlightIso: j.targetIso,
+        roundRules: { ...rulesFor("easy", "mission"), showNames: true, missPenalty: 0 },
+        flyTo: fly,
+      })
+      return
+    }
+    if (j.leg === "flags") {
+      set({
+        stage: "flag",
+        mission: j.targetIso ? journeyFlagMission(j.targetIso) : null,
+        missionEndsAt: null,
+        roundRules: { ...rulesFor("easy", "mission"), showNames: false, missPenalty: 0 },
+        flyTo: fly,
+      })
+      return
+    }
+    if (j.leg === "puzzle") {
+      set({ stage: "puzzle", mission: null, missionEndsAt: null, flyTo: fly })
+      return
+    }
+    if (j.leg === "inter-flags" || j.leg === "inter-puzzle" || j.leg === "results") {
+      set({ stage: "hub", mission: null, missionEndsAt: null })
+    }
+  },
+
+  awardJourney: (draft) => {
+    const j = draft
+    if (!j || j.awarded) return
+    let progress = get().progress
+    if (progress.journeyAwarded.includes(j.id)) {
+      const done = { ...j, awarded: true }
+      persistJourney(null)
+      set({ journey: done, stage: "hub" })
+      return
+    }
+    const xp = journeyXp(j)
+    progress = {
+      ...progress,
+      xp: progress.xp + xp,
+      coins: progress.coins + 40,
+      continentXp: progress.continentXp + xp,
+      journeyAwarded: [...progress.journeyAwarded, j.id],
+    }
+    progress = grantMany(progress, achievementIdsFor(progress))
+    const done = { ...j, awarded: true, xpPending: xp, leg: "results" as JourneyLeg }
+    persistJourney(null)
+    audio.play("missionComplete")
+    audio.play("success")
+    set({
+      progress,
+      displayXp: progress.xp,
+      journey: done,
+      rewardPulse: xp,
+      toast: { text: `${t().play.journeyResults} · +${xp} XP`, kind: "ach" },
     })
     void persist(progress)
   },
