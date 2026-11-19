@@ -71,7 +71,7 @@ export function EarthBundle({
   return (
     <>
       <LodTracker onLod={setLod} />
-      <CountryLabels countries={labeled} visible={showNames} />
+      <CountryLabels countries={labeled} visible={showNames} keepIso={selectedIso || highlightIso || hoverIso} />
       {hoverCapitals ? <HoverCapital iso={hoverIso} enabled /> : null}
       <Suspense fallback={<EarthWarmup />}>
         <EarthScene
@@ -87,6 +87,9 @@ export function EarthBundle({
           flyTo={flyTo}
           lod={lod}
           onPick={onPick}
+          onFly={(hit) => {
+            if (hit.iso) useGame.getState().fly(hit.lat, hit.lng, 2.58)
+          }}
           onHover={(hit) => {
             setHoverIso(hit?.iso ?? null)
             onHover?.(hit)

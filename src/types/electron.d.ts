@@ -17,7 +17,7 @@ declare global {
     geoQuest?: GeoQuestApi
     geoQuestDebug?: {
       fly: (lat: number, lng: number, dist?: number) => void
-      stage: (s: "register" | "explore" | "discover" | "mission" | "flag" | "journal" | "settings" | "daily") => void
+      stage: (s: "register" | "continent" | "hub" | "explore" | "discover" | "mission" | "flag" | "journal" | "settings" | "daily" | "puzzle") => void
       daily?: () => void
       toast?: () => string | null
       landmark: (id: string) => void

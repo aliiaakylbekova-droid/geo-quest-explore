@@ -4,12 +4,16 @@ import { audio } from "../audio/AudioManager"
 import { TutorialOverlay, tutorialDone } from "../screens/TutorialOverlay"
 import { ACHIEVEMENTS } from "../data/achievements"
 import { GEO_CAMPAIGN } from "../data/campaign"
+import { CONTINENT_RU } from "../data/continents"
 import { CONTINENTS, shiftDate, todayKey } from "../data/daily"
 import { LANDMARKS, NEIGHBORS, getCatalog, loadCatalog } from "../geo/catalog"
 import { formatClock } from "./logic"
 import { CampaignOverlay } from "./CampaignOverlay"
+import { LearningHub } from "./LearningHub"
+import { MapPuzzle } from "./MapPuzzle"
 import { t } from "../i18n"
 import { FLAG_MODES, STORY_MISSIONS, type StoryMission } from "./storyMissions"
+import { ContinentPick } from "../screens/ContinentPick"
 import { StageView } from "../three/StageView"
 import { useGame } from "../store/gameStore"
 
@@ -54,16 +58,6 @@ function countryName(iso: string | null) {
   return getCatalog()?.byIso.get(iso)?.name ?? iso
 }
 
-const CONTINENT_RU: Record<string, string> = {
-  Asia: "Азия",
-  Europe: "Европа",
-  Africa: "Африка",
-  "North America": "Северная Америка",
-  "South America": "Южная Америка",
-  Oceania: "Океания",
-  Antarctica: "Антарктида",
-}
-
 export function GameShell() {
   const stage = useGame((s) => s.stage)
   const setStage = useGame((s) => s.setStage)
@@ -95,6 +89,7 @@ export function GameShell() {
   const displayXp = useGame((s) => s.displayXp)
   const openDaily = useGame((s) => s.openDaily)
   const playDailyTask = useGame((s) => s.playDailyTask)
+  const openPuzzle = useGame((s) => s.openPuzzle)
   const clearToast = useGame((s) => s.clearToast)
   const hideNames = stage === "mission"
   const [hintOn, setHintOn] = useState(false)
@@ -105,6 +100,7 @@ export function GameShell() {
   const [moreOpen, setMoreOpen] = useState(false)
   const [hudMin, setHudMin] = useState(false)
   const [exitAsk, setExitAsk] = useState(false)
+  const [changeCont, setChangeCont] = useState(false)
   const exitToPlaque = useGame((s) => s.exitToPlaque)
   const lastTickSec = useRef<number | null>(null)
   const left = useTick(missionEndsAt)
@@ -162,10 +158,12 @@ export function GameShell() {
     pick(hit)
   }
 
-  const flagPool = useMemo(
-    () => getCatalog()?.countries.filter((c) => c.iso.length === 2 && c.continent !== "Antarctica") ?? [],
-    [stage, selectedIso],
-  )
+  const flagPool = useMemo(() => {
+    const all = getCatalog()?.countries.filter((c) => c.iso.length === 2 && c.continent !== "Antarctica") ?? []
+    const home = progress.learningContinent
+    const scoped = home ? all.filter((c) => c.continent === home) : all
+    return scoped.length >= 6 ? scoped : all
+  }, [stage, selectedIso, progress.learningContinent])
 
   function newFlagRound(kind: (typeof FLAG_MODES)[number] = "flag") {
     const pool = flagPool.length ? flagPool : [{ iso: "KG", name: "Кыргызстан", capital: "Бишкек", lat: 41.2, lng: 74.6, continent: "Asia", a3: "KGZ", nameEn: "Kyrgyzstan", subregion: "", pop: 0 }]
@@ -256,8 +254,13 @@ export function GameShell() {
   }
 
   useEffect(() => {
-    if (stage !== "flag") setFlagRound(null)
-    else if (mission?.kind === "flag" && mission.targetIso) setFlagRound(mission)
+    if (stage !== "flag") {
+      setFlagRound(null)
+      setHoverTip(null)
+      return
+    }
+    if (mission?.kind === "flag" && mission.targetIso) setFlagRound(mission)
+    else if (!mission || (mission.kind !== "flag" && !mission.id.startsWith("daily-"))) newFlagRound("flag")
     setHoverTip(null)
   }, [stage, mission?.id, mission?.kind])
 
@@ -307,7 +310,11 @@ export function GameShell() {
     ? campaign.title
     : stage === "explore"
       ? ui.explore
-      : stage === "discover"
+      : stage === "hub"
+        ? ui.hub
+        : stage === "puzzle"
+          ? ui.puzzle
+          : stage === "discover"
         ? ui.discover
         : stage === "journal"
           ? ui.journal
@@ -319,7 +326,11 @@ export function GameShell() {
   const leftBrief = campaign
     ? campaign.instruction
     : stage === "explore"
-      ? "Вращай Землю, приближай, кликай страны. Сначала смотри, потом задание."
+      ? "Вращай Землю, приближай, кликай страны. Двойной клик — подлёт. Сначала смотри, потом задание."
+      : stage === "hub"
+        ? ui.pickContinentLead
+        : stage === "puzzle"
+          ? ui.puzzleBrief
       : stage === "discover"
         ? landmark?.fact
         : stage === "journal"
@@ -366,7 +377,7 @@ export function GameShell() {
           <span>{displayXp} XP</span>
           <span className="sep" />
           <span>
-            {ui.streak} {progress.playStreak}
+            {ui.streak} {progress.questStreak || progress.playStreak}
           </span>
           <span className="sep" />
           <span>◆ {progress.coins}</span>
@@ -416,7 +427,19 @@ export function GameShell() {
           {stage === "explore" ? (
             <p className="goal">
               <span>{ui.goal}</span>
-              Изучи территорию. Имена стран — только при наведении или выборе.
+              Изучи территорию. Двойной клик по стране — подлёт. Имена крупнее вдали, мельче вблизи.
+            </p>
+          ) : null}
+          {stage === "hub" ? (
+            <p className="goal">
+              <span>{ui.myLearning}</span>
+              {CONTINENT_RU[progress.learningContinent] ?? progress.learningContinent} · {progress.continentXp} XP
+            </p>
+          ) : null}
+          {stage === "puzzle" ? (
+            <p className="goal">
+              <span>{ui.goal}</span>
+              {ui.puzzleBrief}
             </p>
           ) : null}
           {stage === "discover" && landmark ? (
@@ -483,7 +506,7 @@ export function GameShell() {
           {stage === "daily" ? (
             <div className="gq-daily">
               <p className="tiny">
-                {ui.loginStreak}: {progress.loginStreak} · {progress.dailyComplete ? ui.dailyDone : `${progress.dailyTasks.filter((task) => task.done).length}/${progress.dailyTasks.length}`}
+                {ui.streak}: {progress.questStreak} · {ui.loginStreak}: {progress.loginStreak} · {progress.dailyComplete ? ui.dailyDone : `${progress.dailyTasks.filter((task) => task.done).length}/${progress.dailyTasks.length}`}
               </p>
               <div className="gq-cal" aria-label={ui.loginStreak}>
                 {calDays.map((d) => (
@@ -500,6 +523,17 @@ export function GameShell() {
                   </li>
                 ))}
               </ul>
+              {progress.weekly.length ? (
+                <div className="gq-weekly">
+                  <p className="tiny">{ui.weekly}</p>
+                  {progress.weekly.map((w) => (
+                    <p key={w.id} className="tiny">
+                      {w.title}: {Math.min(w.count, w.goal)}/{w.goal}
+                      {w.done ? " ✓" : ""}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ) : null}
           {stage === "settings" ? (
@@ -516,6 +550,12 @@ export function GameShell() {
                   </button>
                 ))}
               </div>
+              <p className="tiny">
+                {ui.learningArea}: {CONTINENT_RU[progress.learningContinent] ?? (progress.learningContinent || "—")}
+              </p>
+              <button type="button" className="chip" onClick={() => setChangeCont(true)}>
+                {ui.changeContinent}
+              </button>
             </div>
           ) : null}
           <div className="mission-progress">
@@ -643,6 +683,9 @@ export function GameShell() {
       </div>
 
       <main className="hud-center">
+        {stage === "puzzle" ? (
+          <MapPuzzle />
+        ) : (
         <StageView
           discover={discover}
           scene={landmark.scene}
@@ -659,6 +702,8 @@ export function GameShell() {
               })
           }}
         />
+        )}
+        {stage === "hub" ? <LearningHub /> : null}
         {!hideNames && hoverTip ? (
           <div className="gq-tip" style={{ left: hoverTip.x, top: hoverTip.y }}>
             <span>{hoverTip.name}</span>
@@ -776,6 +821,32 @@ export function GameShell() {
           </select>
           <button
             type="button"
+            className={stage === "hub" ? "on" : ""}
+            onClick={() => {
+              setMoreOpen(false)
+              setStage("hub")
+            }}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 11l8-7 8 7v9H4z" />
+            </svg>
+            <span>{ui.hub}</span>
+          </button>
+          <button
+            type="button"
+            className={stage === "puzzle" ? "on" : ""}
+            onClick={() => {
+              setMoreOpen(false)
+              openPuzzle()
+            }}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z" />
+            </svg>
+            <span>{ui.puzzle}</span>
+          </button>
+          <button
+            type="button"
             className={stage === "daily" ? "on" : ""}
             onClick={() => {
               setMoreOpen(false)
@@ -879,6 +950,14 @@ export function GameShell() {
       ) : null}
       <CampaignOverlay />
       {introPhase === "ready" && coach ? <TutorialOverlay onDone={() => setCoach(false)} /> : null}
+      {changeCont ? (
+        <div className="gq-tutorial" data-continent="change">
+          <button type="button" className="btn ghost gq-cont-close" onClick={() => setChangeCont(false)}>
+            {dict.common.close}
+          </button>
+          <ContinentPick changing onPicked={() => setChangeCont(false)} />
+        </div>
+      ) : null}
     </div>
   )
 }

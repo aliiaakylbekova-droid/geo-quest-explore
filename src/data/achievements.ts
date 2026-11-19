@@ -21,4 +21,6 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: "login-3", title: "Три дня", hint: "Заходи три дня подряд." },
   { id: "daily-first", title: "Ежедневный старт", hint: "Закрой все задания дня." },
   { id: "asia-12", title: "Азия", hint: "Открой 12 стран Азии." },
+  { id: "puzzle-asia", title: "Пазл Азии", hint: "Собери карту Азии на лёгком уровне." },
+  { id: "puzzle-first", title: "Картограф-сборщик", hint: "Собери любой материк в MAP PUZZLE." },
 ]

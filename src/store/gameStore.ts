@@ -1,7 +1,17 @@
 import { create } from "zustand"
 import { audio } from "../audio/AudioManager"
 import { GEO_CAMPAIGN, type CampaignLevel } from "../data/campaign"
+import { CONTINENT_FLY } from "../data/continents"
 import { buildDailyTasks, dailyToMission, shiftDate, todayKey, type DailyTask } from "../data/daily"
+import {
+  bumpQuestStreak,
+  buildLearningDailies,
+  buildWeekly,
+  learningDailyToMission,
+  weekKey,
+  type ContinentStat,
+  type WeeklyChallenge,
+} from "../data/learning"
 import { countryNameOf, continentOf, evaluateLevel, evaluateMission } from "../geo/hitTest"
 import { getCatalog, LANDMARKS } from "../geo/catalog"
 import type { StoryMission } from "../game/storyMissions"
@@ -12,7 +22,7 @@ import { cloudPull, cloudPush, cloudResetProgress } from "../net/cloud"
 import { publishScore } from "../net/leaderboard"
 import type { Profile } from "../types/electron"
 
-export type Stage = "register" | "explore" | "discover" | "mission" | "flag" | "journal" | "settings" | "daily"
+export type Stage = "register" | "continent" | "hub" | "explore" | "discover" | "mission" | "flag" | "journal" | "settings" | "daily" | "puzzle"
 export type ToastKind = "ok" | "xp" | "ach"
 export type IntroPhase = "card" | "approach" | "ready"
 export type CampaignPhase = "play" | "correct" | "success" | "wrong" | "timeout" | "levelComplete" | "campaignComplete" | "transition"
@@ -63,6 +73,15 @@ export type Progress = {
   dailyTasks: DailyTask[]
   dailyComplete: boolean
   flagUnlocked: string[]
+  learningContinent: string
+  continentXp: number
+  continentStats: Record<string, ContinentStat>
+  puzzleDone: string[]
+  questStreak: number
+  bestQuestStreak: number
+  lastQuestDate: string
+  weeklyKey: string
+  weekly: WeeklyChallenge[]
 }
 
 const defaultProgress = (): Progress => ({
@@ -92,18 +111,56 @@ const defaultProgress = (): Progress => ({
   dailyTasks: [],
   dailyComplete: false,
   flagUnlocked: [],
+  learningContinent: "",
+  continentXp: 0,
+  continentStats: {},
+  puzzleDone: [],
+  questStreak: 0,
+  bestQuestStreak: 0,
+  lastQuestDate: "",
+  weeklyKey: "",
+  weekly: [],
 })
 
 function ensureDaily(progress: Progress): Progress {
   const day = todayKey()
   const countries = getCatalog()?.countries ?? []
   if (progress.dailyDate === day && progress.dailyTasks.length) return progress
+  const tasks = progress.learningContinent
+    ? buildLearningDailies(day, countries, progress.learningContinent)
+    : buildDailyTasks(day, countries)
   return {
     ...progress,
     dailyDate: day,
-    dailyTasks: buildDailyTasks(day, countries),
+    dailyTasks: tasks,
     dailyComplete: false,
   }
+}
+
+function ensureWeekly(progress: Progress): Progress {
+  const key = weekKey()
+  if (progress.weeklyKey === key && progress.weekly.length) return progress
+  return {
+    ...progress,
+    weeklyKey: key,
+    weekly: buildWeekly(progress.learningContinent || "Asia"),
+  }
+}
+
+function bumpWeekly(progress: Progress, id: string, by = 1): Progress {
+  if (!progress.weekly.length) return progress
+  const weekly = progress.weekly.map((w) => {
+    if (w.id !== id || w.done) return w
+    const count = w.count + by
+    return { ...w, count, done: count >= w.goal }
+  })
+  let next: Progress = { ...progress, weekly }
+  weekly.forEach((w, i) => {
+    if (w.done && !progress.weekly[i]?.done) {
+      next = { ...next, xp: next.xp + w.xp, coins: next.coins + 15, continentXp: next.continentXp + w.xp }
+    }
+  })
+  return next
 }
 
 function touchLogin(progress: Progress): Progress {
@@ -120,7 +177,7 @@ function touchLogin(progress: Progress): Progress {
       bestLoginStreak: Math.max(progress.bestLoginStreak, streak),
     }
   }
-  return ensureDaily(next)
+  return ensureWeekly(ensureDaily(next))
 }
 
 function playerLevel(xp: number) {
@@ -144,6 +201,9 @@ function achievementIdsFor(progress: Progress) {
   if (progress.xp >= 500) ids.push("xp-500")
   if (progress.xp >= 1500) ids.push("xp-1500")
   if (progress.dailyComplete) ids.push("daily-first")
+  if (progress.questStreak >= 3) ids.push("login-3")
+  if (progress.puzzleDone.length >= 1) ids.push("puzzle-first")
+  if (progress.puzzleDone.includes("Asia:easy")) ids.push("puzzle-asia")
   if (progress.missionsDone.length >= 1) ids.push("first-mission")
   const asia = progress.visited.filter((iso) => continentOf(iso) === "Asia").length
   if (asia >= 12) ids.push("asia-12")
@@ -217,6 +277,9 @@ type GameState = {
   playDailyTask: (id: string) => void
   reseedDaily: () => void
   clearToast: () => void
+  pickContinent: (continent: string) => void
+  openPuzzle: () => void
+  completePuzzle: (key: string, xp: number) => void
 }
 
 async function persist(progress: Progress, profile?: Profile | null) {
@@ -276,6 +339,11 @@ export const useGame = create<GameState>((set, get) => ({
         (localStorage.getItem("gq-progress") ? JSON.parse(localStorage.getItem("gq-progress")!) : null)) as Progress | null
       let progress = touchLogin(saved ? { ...defaultProgress(), ...saved } : defaultProgress())
       if (!Array.isArray(progress.flagUnlocked)) progress = { ...progress, flagUnlocked: [] }
+      if (!progress.continentStats || typeof progress.continentStats !== "object") progress = { ...progress, continentStats: {} }
+      if (!Array.isArray(progress.puzzleDone)) progress = { ...progress, puzzleDone: [] }
+      if (!Array.isArray(progress.weekly)) progress = { ...progress, weekly: [] }
+      if (typeof progress.learningContinent !== "string") progress = { ...progress, learningContinent: "" }
+      progress = ensureWeekly(progress)
       let nextProfile = profile
       if (!nextProfile) {
         const cloud = await cloudPull()
@@ -320,7 +388,16 @@ export const useGame = create<GameState>((set, get) => ({
     await persist(progress, profile)
     audio.unlock()
     audio.play("ambient")
-    set({ profile, progress, displayXp: progress.xp, stage: "explore", introPhase: "approach" })
+    const needPick = !progress.learningContinent
+    const home = CONTINENT_FLY[progress.learningContinent]
+    set({
+      profile,
+      progress,
+      displayXp: progress.xp,
+      stage: needPick ? "continent" : "hub",
+      introPhase: needPick ? "card" : "approach",
+      flyTo: needPick ? null : home ?? { lat: 25, lng: 12, dist: 6.5 },
+    })
   },
 
   finishIntro: () => {
@@ -330,8 +407,8 @@ export const useGame = create<GameState>((set, get) => ({
 
   setStage: (stage) => {
     let progress = get().progress
-    if (stage === "explore") progress = grant(progress, "globe-spin")
-    const home = stage === "explore" && get().stage !== "explore"
+    if (stage === "explore" || stage === "hub") progress = grant(progress, "globe-spin")
+    const home = (stage === "explore" || stage === "hub") && get().stage !== stage
     if (home || stage !== "flag") {
       clearFlagFlow()
     }
@@ -340,7 +417,7 @@ export const useGame = create<GameState>((set, get) => ({
       campaign: stage === "mission" ? get().campaign : null,
       lastFeedback: null,
       flagFillIso: stage === "flag" ? get().flagFillIso : null,
-      flyTo: home ? { lat: 25, lng: 12, dist: 6.5 } : get().flyTo,
+      flyTo: home ? CONTINENT_FLY[progress.learningContinent] ?? { lat: 25, lng: 12, dist: 6.5 } : get().flyTo,
       ...(home
         ? {
             selectedIso: null,
@@ -380,7 +457,8 @@ export const useGame = create<GameState>((set, get) => ({
     if (!useFlag && !useStory && !useCampaign) {
       if (isNewCountry) {
         audio.play("unlock")
-        progress = { ...progress, xp: progress.xp + 15, coins: progress.coins + 10 }
+        progress = { ...progress, xp: progress.xp + 15, coins: progress.coins + 10, continentXp: progress.continentXp + 15 }
+        if (continentOf(hit.iso) === progress.learningContinent) progress = bumpWeekly(progress, "w-open")
         progress = grantMany(progress, achievementIdsFor(progress))
       }
       set({
@@ -452,6 +530,7 @@ export const useGame = create<GameState>((set, get) => ({
         journal: get().progress.journal,
         xp: progress.xp + gained,
         coins: progress.coins + 20 + (isNewCountry ? 10 : 0),
+        continentXp: progress.continentXp + gained,
         playStreak,
         bestPlayStreak: Math.max(progress.bestPlayStreak, playStreak),
         flagUnlocked,
@@ -460,6 +539,11 @@ export const useGame = create<GameState>((set, get) => ({
         const dailyTasks = scored.dailyTasks.map((task) => (task.id === st.activeDailyId ? { ...task, done: true } : task))
         const dailyComplete = dailyTasks.every((task) => task.done)
         scored = { ...scored, dailyTasks, dailyComplete, xp: scored.xp + (dailyComplete && !progress.dailyComplete ? 80 : 0) }
+        scored = bumpQuestStreak(scored)
+        scored = bumpWeekly(scored, "w-daily")
+      }
+      if (isNewCountry && continentOf(hit.iso) === scored.learningContinent) {
+        scored = bumpWeekly(scored, "w-open")
       }
       const freshAch = achievementIdsFor(scored).filter((id) => !scored.achievements.includes(id))
       scored = grantMany(scored, achievementIdsFor(scored))
@@ -593,10 +677,10 @@ export const useGame = create<GameState>((set, get) => ({
       toast: null,
       rewardPulse: 0,
       flyTo: flagLike || daily
-        ? { lat: 22, lng: 18, dist: 6.6 }
+        ? CONTINENT_FLY[get().progress.learningContinent] ?? { lat: 22, lng: 18, dist: 6.6 }
         : mission.lat != null
           ? { lat: mission.lat, lng: mission.lng ?? 0, dist: 5.4 }
-          : { lat: 20, lng: 30, dist: 6.5 },
+          : CONTINENT_FLY[get().progress.learningContinent] ?? { lat: 20, lng: 30, dist: 6.5 },
     })
   },
 
@@ -609,8 +693,8 @@ export const useGame = create<GameState>((set, get) => ({
       lastFeedback: null,
       flagMoment: null,
       flagFillIso: null,
-      stage: "explore",
-      flyTo: { lat: 18, lng: 20, dist: 6.5 },
+      stage: "hub",
+      flyTo: CONTINENT_FLY[get().progress.learningContinent] ?? { lat: 18, lng: 20, dist: 6.5 },
     })
   },
 
@@ -744,18 +828,90 @@ export const useGame = create<GameState>((set, get) => ({
       set({ progress })
       return
     }
-    const mission = dailyToMission(task)
+    const mission = progress.learningContinent ? learningDailyToMission(task) : dailyToMission(task)
     set({ progress })
     get().startMission(mission)
   },
 
   reseedDaily: () => {
     const countries = getCatalog()?.countries ?? []
-    if (countries.length < 12) return
+    if (countries.length < 6) return
     const current = get().progress
-    const keep = current.dailyDate === todayKey() && current.dailyTasks.length >= 12
+    const keep = current.dailyDate === todayKey() && current.dailyTasks.length >= 3
     const progress = keep ? current : ensureDaily({ ...current, dailyTasks: [] })
     set({ progress })
+    void persist(progress)
+  },
+
+  pickContinent: (continent) => {
+    const st = get()
+    let progress = { ...st.progress }
+    const prev = progress.learningContinent
+    const stats = { ...progress.continentStats }
+    if (prev) {
+      stats[prev] = {
+        xp: progress.continentXp,
+        visited: progress.visited.filter((iso) => continentOf(iso) === prev),
+        puzzleDone: progress.puzzleDone.filter((k) => k.startsWith(`${prev}:`)),
+      }
+    }
+    const restored = stats[continent]
+    progress = {
+      ...progress,
+      learningContinent: continent,
+      continentXp: restored?.xp ?? (prev === continent ? progress.continentXp : 0),
+      continentStats: stats,
+      dailyDate: "",
+      dailyTasks: [],
+      weeklyKey: prev === continent ? progress.weeklyKey : "",
+      weekly: prev === continent ? progress.weekly : [],
+    }
+    progress = ensureWeekly(ensureDaily(progress))
+    const first = st.stage === "continent" || st.introPhase === "card"
+    audio.play("startClick")
+    audio.play("transition")
+    set({
+      progress,
+      stage: first ? "hub" : st.stage === "continent" ? "hub" : st.stage,
+      introPhase: first ? "approach" : st.introPhase,
+      flyTo: CONTINENT_FLY[continent] ?? st.flyTo,
+    })
+    void persist(progress)
+  },
+
+  openPuzzle: () => {
+    audio.play("transition")
+    set({
+      stage: "puzzle",
+      campaign: null,
+      mission: null,
+      missionEndsAt: null,
+      lastFeedback: null,
+      flyTo: CONTINENT_FLY[get().progress.learningContinent] ?? { lat: 32, lng: 95, dist: 5.2 },
+    })
+  },
+
+  completePuzzle: (key, xp) => {
+    let progress = get().progress
+    const first = !progress.puzzleDone.includes(key)
+    const gained = first ? xp : Math.round(xp * 0.35)
+    progress = {
+      ...progress,
+      puzzleDone: first ? [...progress.puzzleDone, key] : progress.puzzleDone,
+      xp: progress.xp + gained,
+      coins: progress.coins + (first ? 25 : 8),
+      continentXp: progress.continentXp + gained,
+    }
+    progress = bumpWeekly(progress, "w-puzzle")
+    progress = grantMany(progress, achievementIdsFor(progress))
+    audio.play("success")
+    audio.play("discovery")
+    set({
+      progress,
+      displayXp: progress.xp,
+      toast: { text: t().play.puzzleWin, kind: first ? "ach" : "xp" },
+      rewardPulse: gained,
+    })
     void persist(progress)
   },
 

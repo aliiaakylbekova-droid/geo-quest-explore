@@ -1,6 +1,6 @@
 import { OrbitControls, Stars } from "@react-three/drei"
 import { useFrame, useThree } from "@react-three/fiber"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { type ComponentRef, useEffect, useMemo, useRef, useState } from "react"
 import {
   AdditiveBlending,
   BackSide,
@@ -10,10 +10,10 @@ import {
   Spherical,
   TextureLoader,
   Vector3,
-  type DirectionalLight,
   type Group,
   type LineBasicMaterial,
   type Mesh,
+  type MeshStandardMaterial,
   type Texture,
 } from "three"
 import { useGame } from "../store/gameStore"
@@ -46,7 +46,7 @@ function prefetchJpeg(path: string, srgb: boolean) {
   if (typeof window === "undefined" || jpegCache.has(path)) return
   new TextureLoader().load(path, (ready) => {
     if (srgb) ready.colorSpace = SRGBColorSpace
-    ready.anisotropy = 2
+    ready.anisotropy = 4
     ready.needsUpdate = true
     jpegCache.set(path, ready)
   })
@@ -54,6 +54,7 @@ function prefetchJpeg(path: string, srgb: boolean) {
 
 prefetchJpeg(`${import.meta.env.BASE_URL}textures/earth-day.jpg`, true)
 prefetchJpeg(`${import.meta.env.BASE_URL}textures/earth-bump.jpg`, false)
+prefetchJpeg(`${import.meta.env.BASE_URL}textures/earth-water.png`, false)
 
 function useJpegTexture(path: string, srgb: boolean) {
   const [tex, setTex] = useState<Texture | null>(() => jpegCache.get(path) ?? null)
@@ -68,7 +69,7 @@ function useJpegTexture(path: string, srgb: boolean) {
       path,
       (ready) => {
         if (srgb) ready.colorSpace = SRGBColorSpace
-        ready.anisotropy = 2
+        ready.anisotropy = 4
         ready.needsUpdate = true
         jpegCache.set(path, ready)
         if (!dead) setTex(ready)
@@ -99,6 +100,7 @@ type Props = {
   lod: number
   onPick: (hit: { iso: string | null; lat: number; lng: number }) => void
   onHover?: (hit: GlobeHover | null) => void
+  onFly?: (hit: { iso: string | null; lat: number; lng: number }) => void
 }
 
 function ClimateShell({ on }: { on: boolean }) {
@@ -136,11 +138,17 @@ function ClimateShell({ on }: { on: boolean }) {
   )
 }
 
-function Atmosphere() {
+function Atmosphere({ close }: { close: boolean }) {
   return (
-    <mesh scale={1.045} raycast={() => undefined}>
+    <mesh scale={close ? 1.018 : 1.045} raycast={() => undefined}>
       <sphereGeometry args={[EARTH_R, 64, 48]} />
-      <meshBasicMaterial color="#7ec8ff" transparent opacity={0.14} blending={AdditiveBlending} side={BackSide} />
+      <meshBasicMaterial
+        color={close ? "#c9e8ff" : "#7ec8ff"}
+        transparent
+        opacity={close ? 0.07 : 0.14}
+        blending={AdditiveBlending}
+        side={BackSide}
+      />
     </mesh>
   )
 }
@@ -149,7 +157,7 @@ export function EarthScene({
   features,
   cities: _cities,
   rivers,
-  lakes: _lakes,
+  lakes,
   marine: _marine,
   mountains: _mountains,
   selectedIso,
@@ -159,10 +167,11 @@ export function EarthScene({
   lod: _lod,
   onPick,
   onHover,
+  onFly,
 }: Props) {
   const day = useJpegTexture(`${import.meta.env.BASE_URL}textures/earth-day.jpg`, true)
   const bump = useJpegTexture(`${import.meta.env.BASE_URL}textures/earth-bump.jpg`, false)
-  const sun = useRef<DirectionalLight>(null)
+  const water = useJpegTexture(`${import.meta.env.BASE_URL}textures/earth-water.png`, false)
   const { camera } = useThree()
   const introPhase = useGame((s) => s.introPhase)
   const finishIntro = useGame((s) => s.finishIntro)
@@ -172,57 +181,61 @@ export function EarthScene({
   const campaign = useGame((s) => s.campaign)
   const flagHunt = stage === "flag"
   const missionMode = (stage === "mission" || Boolean(campaign)) && !flagHunt
-  const strongBorders = missionMode || layers.borders || flagHunt
+  void flagHunt
   const earth = useRef<Group>(null)
   const globeMesh = useRef<Mesh>(null)
+  const landMat = useRef<MeshStandardMaterial>(null)
+  const waterMat = useRef<MeshStandardMaterial>(null)
+  const borderFar = useRef<LineBasicMaterial>(null)
+  const borderNear = useRef<LineBasicMaterial>(null)
+  const controls = useRef<ComponentRef<typeof OrbitControls>>(null)
   const fly = useRef(0)
   const target = useRef(new Vector3(0, 0.4, 6.2))
   const look = useRef(new Vector3(0, 0, 0))
   const far = useRef(cameraFor(18, 8, 11.2))
-  const near = useRef(cameraFor(25, 12, 6.35))
   const introClock = useRef(0)
   const introDone = useRef(false)
   const outline = useRef(new Color("#5ee7ff"))
   const outlineMat = useRef<LineBasicMaterial>(null)
-  const flying = useRef(false)
+  const closeRef = useRef(false)
+  const [close, setClose] = useState(false)
+  const sunDir = useMemo(() => new Vector3(7.4, 3.1, 5.2).normalize(), [])
+
+  useEffect(() => {
+    if (introPhase === "approach") {
+      introClock.current = 0
+      introDone.current = false
+    }
+  }, [introPhase])
 
   useEffect(() => {
     if (!flyTo || introPhase !== "ready") return
     target.current.copy(cameraFor(flyTo.lat, flyTo.lng, flyTo.dist))
     fly.current = 1
-    flying.current = true
+    const oc = controls.current
+    if (oc) oc.enabled = false
   }, [flyTo, introPhase])
 
-  useEffect(() => {
-    const sph = new Spherical()
-    const onWheel = (e: WheelEvent) => {
-      const t = e.target as HTMLElement | null
-      if (t?.closest("input, textarea, select, .journal, .audio-set")) return
-      e.preventDefault()
-      if (introPhase !== "ready") return
-      sph.setFromVector3(camera.position)
-      const notch = e.deltaMode === 1 || e.shiftKey
-      if (notch) {
-        sph.theta += Math.sign(e.deltaY || e.deltaX) * 0.14
-      } else {
-        sph.theta += e.deltaX * 0.0025
-        if (e.ctrlKey || e.metaKey) {
-          sph.radius = Math.min(12, Math.max(2.45, sph.radius * Math.exp(e.deltaY * 0.00125)))
-        } else {
-          sph.theta += e.deltaY * 0.0022
-          sph.radius = Math.min(12, Math.max(2.45, sph.radius * Math.exp(e.deltaY * 0.00045)))
-        }
-      }
-      sph.phi = Math.min(Math.PI - 0.12, Math.max(0.12, sph.phi))
-      camera.position.setFromSpherical(sph)
-      camera.lookAt(0, 0, 0)
-    }
-    window.addEventListener("wheel", onWheel, { passive: false })
-    return () => window.removeEventListener("wheel", onWheel)
-  }, [camera, introPhase])
-
   useFrame((_, dt) => {
-    if (sun.current) sun.current.position.copy(camera.position)
+    const dist = camera.position.length()
+    const isClose = dist < 3.55
+    if (isClose !== closeRef.current) {
+      closeRef.current = isClose
+      setClose(isClose)
+    }
+    const bumpAmt = !layers.relief || !bump ? 0 : dist < 3.1 ? 0.16 : dist < 4.2 ? 0.1 : dist < 6 ? 0.06 : 0.04
+    if (landMat.current) {
+      landMat.current.bumpScale = bumpAmt
+      landMat.current.roughness = dist < 3.4 ? 0.58 : 0.7
+    }
+    if (waterMat.current) {
+      waterMat.current.opacity = dist < 3.4 ? 0.34 : 0.22
+    }
+    if (borderFar.current) borderFar.current.opacity = dist < 4 ? 1 : 0.78
+    if (borderNear.current) {
+      borderNear.current.opacity = dist < 3.6 ? 1 : dist < 5 ? 0.88 : 0.7
+      borderNear.current.color.set(dist < 3.8 ? "#1a1610" : missionMode ? "#1a1408" : "#3a3428")
+    }
 
     const want =
       hitTint === "gold" ? "#e8c547" : hitTint === "red" ? "#ff6a3d" : hitTint === "orange" ? "#ff9a4a" : "#5ee7ff"
@@ -230,30 +243,46 @@ export function EarthScene({
     if (outlineMat.current) outlineMat.current.color.copy(outline.current)
 
     if (introPhase !== "ready") {
-      const goal = introPhase === "approach" ? near.current : far.current
-      camera.position.lerp(goal, 1 - Math.exp(-dt * (introPhase === "approach" ? 0.62 : 1.05)))
-      camera.lookAt(look.current)
+      introClock.current += dt
+      const sph = new Spherical().setFromVector3(camera.position)
+      const goal = flyTo ? cameraFor(flyTo.lat, flyTo.lng, Math.max(5.05, flyTo.dist)) : far.current
       if (introPhase === "approach") {
-        introClock.current += dt
-        if (!introDone.current && (introClock.current > 3.05 || camera.position.distanceTo(goal) < 0.14)) {
+        sph.theta += dt * 0.2
+        sph.radius += (goal.length() - sph.radius) * (1 - Math.exp(-dt * 0.7))
+        sph.phi += (new Spherical().setFromVector3(goal).phi - sph.phi) * (1 - Math.exp(-dt * 0.55))
+        camera.position.setFromSpherical(sph)
+        camera.lookAt(look.current)
+        if (!introDone.current && (introClock.current > 3.05 || Math.abs(sph.radius - goal.length()) < 0.12)) {
           introDone.current = true
           finishIntro()
         }
+      } else {
+        sph.setFromVector3(far.current)
+        sph.theta += introClock.current * 0.08
+        camera.position.setFromSpherical(sph)
+        camera.lookAt(look.current)
       }
       return
     }
 
+    const oc = controls.current
     if (fly.current > 0) {
-      camera.position.lerp(target.current, 1 - Math.exp(-dt * 0.85))
+      if (oc) oc.enabled = false
+      camera.position.lerp(target.current, 1 - Math.exp(-dt * 1.15))
       camera.lookAt(look.current)
-      if (camera.position.distanceTo(target.current) < 0.04) {
+      if (camera.position.distanceTo(target.current) < 0.035) {
         fly.current = 0
-        flying.current = false
+        if (oc) {
+          oc.enabled = true
+          oc.update()
+        }
       }
+    } else if (oc && !oc.enabled && campaignPhase !== "transition" && campaignPhase !== "correct" && campaignPhase !== "success") {
+      oc.enabled = true
     }
   })
 
-  const borderGeo = useMemo(() => geometryFromGeoJSON(features, EARTH_R + 0.006), [features])
+  const borderGeo = useMemo(() => geometryFromGeoJSON(features, EARTH_R + 0.0072), [features])
   const riverGeo = useMemo(() => {
     const fake: GeoJSON.Feature[] = rivers
       .filter((r) => r.coords && r.coords.length > 1)
@@ -264,6 +293,16 @@ export function EarthScene({
       }))
     return geometryFromGeoJSON(fake, EARTH_R + 0.01)
   }, [rivers])
+  const lakeGeo = useMemo(() => {
+    const fake: GeoJSON.Feature[] = lakes
+      .filter((r) => r.coords && r.coords.length > 1)
+      .map((r) => ({
+        type: "Feature",
+        properties: {},
+        geometry: { type: "LineString", coordinates: r.coords! },
+      }))
+    return geometryFromGeoJSON(fake, EARTH_R + 0.009)
+  }, [lakes])
 
   const [hoverIso, setHoverIso] = useState<string | null>(null)
   const outlineIso = hoverIso || highlightIso || selectedIso
@@ -273,12 +312,15 @@ export function EarthScene({
     [selectedFeature],
   )
 
+  const playing = introPhase === "ready" && campaignPhase !== "transition" && campaignPhase !== "correct" && campaignPhase !== "success"
+
   return (
     <group>
       <color attach="background" args={["#050814"]} />
-      <ambientLight intensity={0.62} />
-      <hemisphereLight args={[new Color("#9ec9ff"), new Color("#1a120c"), 0.35]} />
-      <directionalLight ref={sun} intensity={2.15} color="#fff4d6" castShadow position={[8, 3, 4]} />
+      <ambientLight intensity={0.42} />
+      <hemisphereLight args={[new Color("#b7d7ff"), new Color("#1a120c"), 0.42]} />
+      <directionalLight intensity={2.55} color="#fff4d0" position={sunDir.clone().multiplyScalar(12).toArray()} />
+      <directionalLight intensity={0.38} color="#8eb4ff" position={[-6, 1.4, -5]} />
       <Stars radius={48} depth={24} count={700} factor={2.2} fade speed={0.25} />
       <GlobePick
         mesh={globeMesh}
@@ -288,40 +330,63 @@ export function EarthScene({
           setHoverIso(hit?.iso ?? null)
           onHover?.(hit)
         }}
-        enabled={introPhase === "ready" && campaignPhase !== "transition" && campaignPhase !== "correct" && campaignPhase !== "success"}
+        onFly={onFly}
+        enabled={playing}
       />
       <group ref={earth}>
       <mesh ref={globeMesh}>
-        <sphereGeometry args={[EARTH_R, 64, 48]} />
+        <sphereGeometry args={[EARTH_R, 96, 64]} />
         <meshStandardMaterial
+          ref={landMat}
           map={day}
           bumpMap={layers.relief && bump ? bump : null}
-          bumpScale={layers.relief && bump ? 0.045 : 0}
-          roughness={0.72}
-          metalness={0.04}
+          bumpScale={layers.relief && bump ? 0.055 : 0}
+          roughness={0.68}
+          metalness={0.03}
           color={day ? "#ffffff" : "#3d6ea8"}
         />
       </mesh>
-      <Atmosphere />
+      {water ? (
+        <mesh raycast={() => undefined}>
+          <sphereGeometry args={[EARTH_R + 0.0012, 96, 64]} />
+          <meshStandardMaterial
+            ref={waterMat}
+            color="#3eb9c8"
+            alphaMap={water}
+            transparent
+            opacity={0.24}
+            depthWrite={false}
+            roughness={0.18}
+            metalness={0.22}
+          />
+        </mesh>
+      ) : null}
+      <Atmosphere close={close} />
       <ClimateShell on={layers.climate} />
-      {strongBorders ? (
+      {layers.borders || missionMode || true ? (
         <>
           <lineSegments geometry={borderGeo} raycast={() => undefined}>
-            <lineBasicMaterial color={missionMode ? "#1a1408" : "#3a3428"} transparent opacity={0.95} />
+            <lineBasicMaterial ref={borderNear} color={missionMode ? "#1a1408" : "#241e16"} transparent opacity={0.92} />
           </lineSegments>
-          <lineSegments geometry={borderGeo} raycast={() => undefined} scale={1.004}>
+          <lineSegments geometry={borderGeo} raycast={() => undefined} scale={1.0036}>
             <lineBasicMaterial
-              color={missionMode ? "#f6e6b8" : "#e8d9a8"}
+              ref={borderFar}
+              color={missionMode ? "#f6e6b8" : "#efe2c4"}
               transparent
-              opacity={missionMode ? 1 : 0.82}
+              opacity={0.88}
             />
           </lineSegments>
         </>
       ) : null}
       {layers.rivers ? (
-        <lineSegments geometry={riverGeo}>
-          <lineBasicMaterial color="#7ad7ff" transparent opacity={0.85} />
-        </lineSegments>
+        <>
+          <lineSegments geometry={riverGeo} raycast={() => undefined}>
+            <lineBasicMaterial color="#7ad7ff" transparent opacity={0.88} />
+          </lineSegments>
+          <lineSegments geometry={lakeGeo} raycast={() => undefined}>
+            <lineBasicMaterial color="#9ee7ff" transparent opacity={0.7} />
+          </lineSegments>
+        </>
       ) : null}
       {selectedGeo ? (
         <lineSegments geometry={selectedGeo} raycast={() => undefined}>
@@ -331,17 +396,21 @@ export function EarthScene({
       <CountryFlags />
       </group>
       <OrbitControls
+        ref={controls}
         makeDefault
         enablePan={false}
         enableRotate
         enableZoom
-        enabled={introPhase === "ready" && campaignPhase !== "transition" && campaignPhase !== "correct" && campaignPhase !== "success"}
-        minDistance={2.45}
+        autoRotate={false}
+        enabled={playing}
+        minDistance={2.28}
         maxDistance={12}
-        zoomSpeed={1.15}
-        rotateSpeed={0.55}
+        minPolarAngle={0.12}
+        maxPolarAngle={Math.PI - 0.12}
+        zoomSpeed={0.72}
+        rotateSpeed={0.48}
         enableDamping
-        dampingFactor={0.078}
+        dampingFactor={0.22}
         touches={{ ONE: 0, TWO: 2 }}
       />
     </group>

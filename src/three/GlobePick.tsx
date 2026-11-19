@@ -31,12 +31,14 @@ export function GlobePick({
   features,
   onPick,
   onHover,
+  onFly,
   enabled,
 }: {
   mesh: RefObject<Mesh | null>
   features: GeoJSON.Feature[]
   onPick: (hit: { iso: string | null; lat: number; lng: number }) => void
   onHover?: (hit: GlobeHover | null) => void
+  onFly?: (hit: { iso: string | null; lat: number; lng: number }) => void
   enabled: boolean
 }) {
   const { camera, gl } = useThree()
@@ -45,11 +47,13 @@ export function GlobePick({
   const featuresRef = useRef(features)
   const pickRef = useRef(onPick)
   const hoverRef = useRef(onHover)
+  const flyRef = useRef(onFly)
   const globeRef = useRef<Mesh | null>(null)
   const enabledRef = useRef(enabled)
   featuresRef.current = features
   pickRef.current = onPick
   hoverRef.current = onHover
+  flyRef.current = onFly
   globeRef.current = mesh.current
   enabledRef.current = enabled
 
@@ -103,12 +107,20 @@ export function GlobePick({
       down.current = null
       if (e.pointerType !== "mouse") hoverRef.current?.(null)
       if (!enabledRef.current || !start) return
+      if (e.detail >= 2) return
       const dx = e.clientX - start.x
       const dy = e.clientY - start.y
       if (dx * dx + dy * dy > DRAG_PX * DRAG_PX) return
       const hit = countryAt(e.clientX, e.clientY)
       if (!hit) return
       pickRef.current({ iso: hit.iso, lat: hit.lat, lng: hit.lng })
+    }
+
+    const onDbl = (e: MouseEvent) => {
+      if (!enabledRef.current) return
+      const hit = countryAt(e.clientX, e.clientY)
+      if (!hit) return
+      flyRef.current?.(hit)
     }
 
     const onLeave = () => {
@@ -122,12 +134,14 @@ export function GlobePick({
     el.addEventListener("pointerup", onUp)
     el.addEventListener("pointercancel", onLeave)
     el.addEventListener("pointerleave", onLeave)
+    el.addEventListener("dblclick", onDbl)
     return () => {
       el.removeEventListener("pointerdown", onDown)
       el.removeEventListener("pointermove", onMove)
       el.removeEventListener("pointerup", onUp)
       el.removeEventListener("pointercancel", onLeave)
       el.removeEventListener("pointerleave", onLeave)
+      el.removeEventListener("dblclick", onDbl)
     }
   }, [camera, gl, mesh])
 

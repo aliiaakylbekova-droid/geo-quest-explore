@@ -41,6 +41,15 @@ function progressRow(userId: string, progress: Progress) {
     daily_tasks: progress.dailyTasks,
     daily_complete: progress.dailyComplete,
     flag_unlocked: progress.flagUnlocked,
+    learning_continent: progress.learningContinent,
+    continent_xp: progress.continentXp,
+    continent_stats: progress.continentStats,
+    puzzle_done: progress.puzzleDone,
+    quest_streak: progress.questStreak,
+    best_quest_streak: progress.bestQuestStreak,
+    last_quest_date: progress.lastQuestDate,
+    weekly_key: progress.weeklyKey,
+    weekly: progress.weekly,
     updated_at: new Date().toISOString(),
   }
 }
@@ -73,6 +82,15 @@ function progressFromRow(row: Record<string, unknown>): Progress {
     dailyTasks: Array.isArray(row.daily_tasks) ? (row.daily_tasks as Progress["dailyTasks"]) : [],
     dailyComplete: Boolean(row.daily_complete),
     flagUnlocked: Array.isArray(row.flag_unlocked) ? (row.flag_unlocked as string[]) : [],
+    learningContinent: String(row.learning_continent || ""),
+    continentXp: Number(row.continent_xp) || 0,
+    continentStats: row.continent_stats && typeof row.continent_stats === "object" ? (row.continent_stats as Progress["continentStats"]) : {},
+    puzzleDone: Array.isArray(row.puzzle_done) ? (row.puzzle_done as string[]) : [],
+    questStreak: Number(row.quest_streak) || 0,
+    bestQuestStreak: Number(row.best_quest_streak) || 0,
+    lastQuestDate: String(row.last_quest_date || ""),
+    weeklyKey: String(row.weekly_key || ""),
+    weekly: Array.isArray(row.weekly) ? (row.weekly as Progress["weekly"]) : [],
   }
 }
 

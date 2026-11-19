@@ -1,5 +1,6 @@
 import { useEffect } from "react"
 import { GameShell } from "./game/GameShell"
+import { ContinentPick } from "./screens/ContinentPick"
 import { RegisterScreen } from "./screens/RegisterScreen"
 import { useGame, type Stage } from "./store/gameStore"
 
@@ -50,6 +51,9 @@ export default function App() {
       },
       daily: () => useGame.getState().openDaily(),
       toast: () => useGame.getState().toast?.text ?? null,
+      hub: () => useGame.getState().setStage("hub"),
+      puzzle: () => useGame.getState().openPuzzle(),
+      continent: (id?: string) => useGame.getState().pickContinent(id || "Asia"),
     }
   }, [])
 
@@ -64,5 +68,6 @@ export default function App() {
   }
 
   if (stage === "register") return <RegisterScreen />
+  if (stage === "continent") return <ContinentPick />
   return <GameShell />
 }
