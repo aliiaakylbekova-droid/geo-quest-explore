@@ -193,8 +193,13 @@ export async function loadHiResCountries() {
 
 export function isoOf(feature: GeoJSON.Feature) {
   const p = feature.properties || {}
-  const raw = p.ISO_A2 !== "-99" ? p.ISO_A2 : p.ISO_A2_EH
-  return String(raw || p.ADM0_A3 || "").toUpperCase()
+  const candidates = [p.ISO_A2, p.ISO_A2_EH, p.WB_A2]
+  for (const raw of candidates) {
+    const iso = String(raw || "").toUpperCase()
+    if (iso && iso !== "-99" && iso.length === 2) return iso
+    if (iso === "CN-TW") return "TW"
+  }
+  return String(p.ADM0_A3 || "").toUpperCase()
 }
 
 export function pickCountry(lng: number, lat: number, features: GeoJSON.Feature[]) {

@@ -66,13 +66,13 @@ export function CountryLabels({
     if (!visible) return
     const cam = camera.position
     const dist = cam.length()
-    const s = dist > 7 ? 0.52 : dist > 5.2 ? 0.4 : 0.32
+    const s = dist > 7.2 ? 0.42 : dist > 5.4 ? 0.3 : dist > 4.2 ? 0.18 : 0.1
     for (const child of g.children) {
       const sp = child as Sprite
       const world = sp.getWorldPosition(scratch.current)
       const facing = world.dot(cam) > 0
-      sp.visible = facing
-      sp.scale.set(s * 2.4, s * 0.6, 1)
+      sp.visible = facing && dist > 3.35
+      sp.scale.set(s * 2.2, s * 0.52, 1)
     }
   })
 

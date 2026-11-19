@@ -39,6 +39,8 @@ export default function App() {
       skipTutorial: () => {
         localStorage.setItem("gq-tutorial-done", "1")
       },
+      daily: () => useGame.getState().openDaily(),
+      toast: () => useGame.getState().toast?.text ?? null,
     }
   }, [])
 

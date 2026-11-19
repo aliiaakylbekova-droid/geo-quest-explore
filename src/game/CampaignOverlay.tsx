@@ -32,6 +32,7 @@ export function CampaignOverlay() {
   const lastPenalty = useGame((s) => s.lastPenalty)
   const mission = useGame((s) => s.mission)
   const stage = useGame((s) => s.stage)
+  const toast = useGame((s) => s.toast)
   const restartAfterTimeout = useGame((s) => s.restartAfterTimeout)
   const ui = t().play
   void useGame((s) => s.progress.locale)
@@ -51,14 +52,10 @@ export function CampaignOverlay() {
   }
   if (stage === "flag" && (flagMoment || lastFeedback)) {
     if (flagMoment === "win" || lastFeedback?.ok) {
+      if (toast) return null
       return (
-        <div className="gq-ticket" data-result="ticket">
-          <div className="gq-fireworks" aria-hidden>
-            <i /><i /><i /><i /><i /><i />
-          </div>
+        <div className="gq-ticket is-compact" data-result="ticket">
           <p className="gq-verdict is-ok">{ui.verdictOk}</p>
-          <p className="kicker">{ui.congrats}</p>
-          <h2>{ui.greatJob}</h2>
           <p className="gq-ticket-copy">{ui.nextTicket}</p>
         </div>
       )
@@ -83,13 +80,11 @@ export function CampaignOverlay() {
   }
   if (!campaign && lastFeedback) {
     if (lastFeedback.ok) {
+      if (toast) return null
       return (
-        <div className="gq-result is-ok" data-result="success">
+        <div className="gq-result is-ok is-compact" data-result="success">
           <p className="gq-verdict is-ok">{ui.verdictOk}</p>
-          <p className="kicker">{ui.greatJob}</p>
-          <h2>{ui.correctLocation}</h2>
           <p className="place">{lastCountryName || mission?.targetName}</p>
-          <p>{mission?.recap}</p>
         </div>
       )
     }
@@ -119,8 +114,9 @@ export function CampaignOverlay() {
   }
 
   if (phase === "success") {
+    if (toast) return null
     return (
-      <div className="gq-result is-ok" data-result="success">
+      <div className="gq-result is-ok is-compact" data-result="success">
         <p className="gq-verdict is-ok">{ui.verdictOk}</p>
         <p className="place">{lastCountryName || campaign.title}</p>
       </div>

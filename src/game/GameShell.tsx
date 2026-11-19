@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import "../index.css"
 import { audio } from "../audio/AudioManager"
 import { TutorialOverlay, tutorialDone } from "../screens/TutorialOverlay"
+import { ACHIEVEMENTS } from "../data/achievements"
 import { GEO_CAMPAIGN } from "../data/campaign"
+import { CONTINENTS, shiftDate, todayKey } from "../data/daily"
 import { LANDMARKS, NEIGHBORS, getCatalog, loadCatalog } from "../geo/catalog"
 import { formatClock } from "./logic"
 import { CampaignOverlay } from "./CampaignOverlay"
@@ -72,6 +74,11 @@ export function GameShell() {
   const lastCountryName = useGame((s) => s.lastCountryName)
   const hitTint = useGame((s) => s.hitTint)
   const screenFlash = useGame((s) => s.screenFlash)
+  const toast = useGame((s) => s.toast)
+  const rewardPulse = useGame((s) => s.rewardPulse)
+  const openDaily = useGame((s) => s.openDaily)
+  const playDailyTask = useGame((s) => s.playDailyTask)
+  const clearToast = useGame((s) => s.clearToast)
   const hideNames = stage === "mission"
   const [hintOn, setHintOn] = useState(false)
   const [point, setPoint] = useState<{ title: string; text: string } | null>(null)
@@ -97,7 +104,7 @@ export function GameShell() {
   }
 
   useEffect(() => {
-    void loadCatalog()
+    void loadCatalog().then(() => useGame.getState().reseedDaily())
   }, [])
 
   useEffect(() => {
@@ -230,14 +237,32 @@ export function GameShell() {
 
   useEffect(() => {
     if (stage !== "flag") setFlagRound(null)
+    else if (mission?.kind === "flag" && mission.targetIso) setFlagRound(mission)
     setHoverTip(null)
-  }, [stage])
+  }, [stage, mission?.id, mission?.kind])
+
+  useEffect(() => {
+    if (!toast) return
+    const id = window.setTimeout(() => clearToast(), 2400)
+    return () => window.clearTimeout(id)
+  }, [toast, clearToast])
 
   useEffect(() => {
     if (stage !== "flag" || !lastFeedback?.ok || !mission) return
-    const id = window.setTimeout(() => newFlagRound("flag"), 3400)
+    if (mission.id.startsWith("daily-")) return
+    const id = window.setTimeout(() => newFlagRound("flag"), 2600)
     return () => window.clearTimeout(id)
   }, [stage, lastFeedback?.ok, mission?.id])
+
+  useEffect(() => {
+    if (!lastFeedback?.ok || !mission?.id.startsWith("daily-")) return
+    const next = progress.dailyTasks.find((task) => !task.done)
+    const id = window.setTimeout(() => {
+      if (next) playDailyTask(next.id)
+      else openDaily()
+    }, 2200)
+    return () => window.clearTimeout(id)
+  }, [lastFeedback?.ok, mission?.id, progress.dailyTasks, playDailyTask, openDaily])
 
   useEffect(() => {
     if (stage !== "mission" || campaign || !lastFeedback?.ok || !mission) return
@@ -257,7 +282,19 @@ export function GameShell() {
   const xpInto = progress.xp % 120
   const missionProgress = Math.min(1, (progress.campaignDone.length || progress.missionsDone.length) / GEO_CAMPAIGN.length)
 
-  const leftTitle = campaign ? campaign.title : stage === "explore" ? ui.explore : stage === "discover" ? ui.discover : stage === "journal" ? ui.journal : stage === "settings" ? dict.settings.title : mission?.title ?? ui.missions
+  const leftTitle = campaign
+    ? campaign.title
+    : stage === "explore"
+      ? ui.explore
+      : stage === "discover"
+        ? ui.discover
+        : stage === "journal"
+          ? ui.journal
+          : stage === "daily"
+            ? ui.daily
+            : stage === "settings"
+              ? dict.settings.title
+              : mission?.title ?? ui.missions
   const leftBrief = campaign
     ? campaign.instruction
     : stage === "explore"
@@ -266,9 +303,18 @@ export function GameShell() {
         ? landmark?.fact
         : stage === "journal"
           ? "Записи экспедиции."
-          : stage === "settings"
-            ? ui.settingsBrief
-            : mission?.story
+          : stage === "daily"
+            ? ui.dailyBrief
+            : stage === "settings"
+              ? ui.settingsBrief
+              : mission?.story
+  const catalog = getCatalog()
+  const continentProgress = CONTINENTS.map((cont) => {
+    const total = catalog?.countries.filter((c) => c.continent === cont && c.iso.length === 2).length ?? 0
+    const have = progress.visited.filter((iso) => catalog?.byIso.get(iso)?.continent === cont).length
+    return { cont, have, total, label: CONTINENT_RU[cont] ?? cont }
+  })
+  const calDays = Array.from({ length: 35 }, (_, i) => shiftDate(todayKey(), i - 34))
 
   return (
     <div
@@ -291,12 +337,16 @@ export function GameShell() {
             {formatClock(left)}
           </div>
         ) : null}
-        <div className="hud-xp">
+        <div className={`hud-xp${rewardPulse ? " is-reward" : ""}`}>
           <span>
             {ui.level} {level}
           </span>
           <span className="sep" />
           <span>{progress.xp} XP</span>
+          <span className="sep" />
+          <span>
+            {ui.streak} {progress.playStreak}
+          </span>
           <span className="sep" />
           <span>◆ {progress.coins}</span>
         </div>
@@ -362,9 +412,60 @@ export function GameShell() {
             </>
           ) : null}
           {stage === "journal" ? (
-            <ul className="journal">
-              {progress.journal.length === 0 ? <li>Пока пусто — исследуй мир.</li> : progress.journal.map((j) => <li key={j.at}>{j.text}</li>)}
-            </ul>
+            <div className="gq-collection">
+              <p className="tiny">
+                {ui.opened}: {progress.visited.length} · {ui.loginStreak}: {progress.loginStreak}
+              </p>
+              <div className="gq-cont-list">
+                {continentProgress.map((row) => (
+                  <p key={row.cont} className="tiny">
+                    {row.label}: {row.have}/{row.total || "—"}
+                  </p>
+                ))}
+              </div>
+              <div className="gq-open-flags">
+                {progress.visited.slice(0, 24).map((iso) => (
+                  <img key={iso} src={`${import.meta.env.BASE_URL}flags/${iso.toLowerCase()}.svg`} alt={iso} />
+                ))}
+              </div>
+              <ul className="journal">
+                {ACHIEVEMENTS.map((a) => (
+                  <li key={a.id} className={progress.achievements.includes(a.id) ? "ok" : ""}>
+                    {a.title}
+                    {progress.achievements.includes(a.id) ? " ✓" : ` — ${a.hint}`}
+                  </li>
+                ))}
+              </ul>
+              {progress.journal.length === 0 ? null : (
+                <ul className="journal">
+                  {progress.journal.map((j) => (
+                    <li key={j.at}>{j.text}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : null}
+          {stage === "daily" ? (
+            <div className="gq-daily">
+              <p className="tiny">
+                {ui.loginStreak}: {progress.loginStreak} · {progress.dailyComplete ? ui.dailyDone : `${progress.dailyTasks.filter((task) => task.done).length}/${progress.dailyTasks.length}`}
+              </p>
+              <div className="gq-cal" aria-label={ui.loginStreak}>
+                {calDays.map((d) => (
+                  <i key={d} className={progress.loginDates.includes(d) ? "on" : ""} title={d} />
+                ))}
+              </div>
+              <ul className="gq-daily-list">
+                {progress.dailyTasks.map((task) => (
+                  <li key={task.id}>
+                    <button type="button" className={task.done ? "chip on" : "chip"} disabled={task.done} onClick={() => playDailyTask(task.id)}>
+                      {task.title}
+                    </button>
+                    <span>{task.goal}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : null}
           {stage === "settings" ? (
             <div className="audio-set">
@@ -444,9 +545,10 @@ export function GameShell() {
             <span>{ui.level}</span>
             <b>{level}</b>
           </div>
-          <div className="xp-track">
+          <div className={`xp-track${rewardPulse ? " is-reward" : ""}`}>
             <span>
               XP {progress.xp} · {xpInto}/120
+              {rewardPulse ? ` · +${rewardPulse}` : ""}
             </span>
             <div className="bar">
               <i style={{ width: `${(xpInto / 120) * 100}%` }} />
@@ -642,6 +744,20 @@ export function GameShell() {
           </select>
           <button
             type="button"
+            className={stage === "daily" ? "on" : ""}
+            onClick={() => {
+              setMoreOpen(false)
+              openDaily()
+            }}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="5" y="6" width="14" height="13" rx="1" />
+              <path d="M8 4v4M16 4v4M5 10h14" />
+            </svg>
+            <span>{ui.daily}</span>
+          </button>
+          <button
+            type="button"
             className={stage === "journal" ? "on" : ""}
             onClick={() => {
               setMoreOpen(false)
@@ -685,6 +801,13 @@ export function GameShell() {
           </button>
         </div>
       </nav>
+
+      {toast ? (
+        <div className={`gq-toast tint-${toast.kind}`} role="status">
+          <strong>{toast.kind === "ach" ? ui.congrats : ui.greatJob}</strong>
+          <p>{toast.text}</p>
+        </div>
+      ) : null}
 
       {stage === "explore" && country ? (
         <div className="country-pop-root">

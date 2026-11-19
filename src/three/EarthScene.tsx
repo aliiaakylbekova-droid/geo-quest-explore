@@ -19,7 +19,7 @@ import { useGame } from "../store/gameStore"
 import type { NamedLine } from "../geo/catalog"
 import { isoOf, type Place } from "../geo/catalog"
 import { EARTH_R, cameraFor, geometryFromGeoJSON } from "./geo"
-import { FlagPins } from "./FlagPins"
+import { CountryFlags } from "./CountryFlags"
 import { GlobePick, type GlobeHover } from "./GlobePick"
 
 export type Layers = {
@@ -116,7 +116,6 @@ export function EarthScene({
   const campaignPhase = useGame((s) => s.campaignPhase)
   const stage = useGame((s) => s.stage)
   const campaign = useGame((s) => s.campaign)
-  const flagPins = useGame((s) => s.flagPins)
   const flagHunt = stage === "flag"
   const missionMode = (stage === "mission" || Boolean(campaign)) && !flagHunt
   const strongBorders = missionMode || layers.borders || flagHunt
@@ -272,10 +271,10 @@ export function EarthScene({
       ) : null}
       {selectedGeo ? (
         <lineSegments geometry={selectedGeo} raycast={() => undefined}>
-          <lineBasicMaterial ref={outlineMat} color="#5ee7ff" transparent opacity={0.98} />
+          <lineBasicMaterial ref={outlineMat} color="#5ee7ff" transparent opacity={0.98} linewidth={2} />
         </lineSegments>
       ) : null}
-      <FlagPins isos={flagPins} />
+      <CountryFlags />
       </group>
       <OrbitControls
         makeDefault
