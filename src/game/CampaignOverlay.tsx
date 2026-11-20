@@ -60,6 +60,16 @@ export function CampaignOverlay() {
 
   if (stage === "discover") return null
   if (journey && (journey.leg === "inter-flags" || journey.leg === "inter-puzzle" || journey.leg === "pick" || journey.leg === "results")) return null
+  if (journey?.leg === "explore" && lastFeedback) {
+    if (lastFeedback.ok) {
+      return (
+        <div className="gq-explore-ok" data-explore-ok="1">
+          <p className="gq-verdict is-ok">{lastFeedback.text}</p>
+          {rewardPulse ? <p className="xp-line">+{rewardPulse} XP</p> : null}
+        </div>
+      )
+    }
+  }
   if (phase === "timeout") {
     return (
       <div className="gq-timeout-end" data-result="timeout">

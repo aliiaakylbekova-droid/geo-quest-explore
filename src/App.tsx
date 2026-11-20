@@ -2,6 +2,7 @@ import { useEffect } from "react"
 import { GameShell } from "./game/GameShell"
 import { ContinentPick } from "./screens/ContinentPick"
 import { RegisterScreen } from "./screens/RegisterScreen"
+import { getCatalog } from "./geo/catalog"
 import { useGame, type Stage } from "./store/gameStore"
 import { CompassGlobeWordmark } from "./ui/CompassGlobe"
 
@@ -66,7 +67,8 @@ export default function App() {
       journeyHit: () => {
         const iso = useGame.getState().journey?.targetIso
         if (!iso) return
-        useGame.getState().pick({ iso, lat: 0, lng: 0 })
+        const rec = getCatalog()?.byIso.get(iso)
+        useGame.getState().pick({ iso, lat: rec?.lat ?? 0, lng: rec?.lng ?? 0 })
       },
       journeyMiss: () => useGame.getState().pick({ iso: "XX", lat: 0, lng: 0 }),
     }

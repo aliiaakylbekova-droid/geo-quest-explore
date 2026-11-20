@@ -14,6 +14,7 @@ import {
 } from "../data/learning"
 import {
   JOURNEY_EXPLORE_GOAL,
+  JOURNEY_EXPLORE_XP,
   JOURNEY_FLAGS_GOAL,
   journeyXp,
   makeJourney,
@@ -44,6 +45,7 @@ export type HitTint = "gold" | "cyan" | "red" | "orange" | null
 let autoAdvanceTimer = 0
 let pulseTimer = 0
 const flagFlowTimers: number[] = []
+const exploreFlowTimers: number[] = []
 const TIMEOUT_PENALTY = 20
 
 const HINT_RESET = {
@@ -58,6 +60,13 @@ const HINT_RESET = {
 function clearFlagFlow() {
   while (flagFlowTimers.length) {
     const id = flagFlowTimers.pop()
+    if (id) window.clearTimeout(id)
+  }
+}
+
+function clearExploreFlow() {
+  while (exploreFlowTimers.length) {
+    const id = exploreFlowTimers.pop()
     if (id) window.clearTimeout(id)
   }
 }
@@ -506,6 +515,7 @@ export const useGame = create<GameState>((set, get) => ({
     if (home || stage !== "flag") {
       clearFlagFlow()
     }
+    if (stage !== "explore") clearExploreFlow()
     set({
       stage,
       campaign: stage === "mission" ? get().campaign : null,
@@ -839,6 +849,7 @@ export const useGame = create<GameState>((set, get) => ({
   exitToPlaque: () => {
     window.clearTimeout(autoAdvanceTimer)
     clearFlagFlow()
+    clearExploreFlow()
     persistJourney(null)
     set({
       stage: "register",
@@ -1127,20 +1138,32 @@ export const useGame = create<GameState>((set, get) => ({
     const targetIso = nextJourneyIso(journey)
     const next = { ...journey, targetIso, usedIsos: targetIso ? [targetIso] : [] }
     persistJourney(next)
+    clearExploreFlow()
+    clearFlagFlow()
+    try {
+      localStorage.setItem("gq-tutorial-done", "1")
+    } catch {
+      /* ignore */
+    }
     audio.play("start")
     audio.play("transition")
     set({
       journey: next,
       stage: "explore",
+      introPhase: "ready",
       mission: null,
       missionEndsAt: null,
       campaign: null,
       lastFeedback: null,
       selectedIso: null,
       highlightIso: targetIso,
+      lastCountryName: null,
+      hitTint: null,
       flagFillIso: null,
       flagMoment: null,
       screenFlash: null,
+      toast: null,
+      campaignPhase: "play",
       roundRules: { ...rulesFor("easy", "mission"), showNames: true, missPenalty: 0 },
       flyTo: CONTINENT_FLY[continent] ?? { lat: 25, lng: 12, dist: 6.2 },
     })
@@ -1214,6 +1237,7 @@ export const useGame = create<GameState>((set, get) => ({
   exitJourney: () => {
     persistJourney(null)
     clearFlagFlow()
+    clearExploreFlow()
     set({
       journey: null,
       journeyPick: null,
@@ -1239,38 +1263,71 @@ export const useGame = create<GameState>((set, get) => ({
       if (j.leg === "explore") {
         const exploreCorrect = j.exploreCorrect + 1
         const done = exploreCorrect >= JOURNEY_EXPLORE_GOAL
-        const next: Journey = {
+        const held: Journey = {
           ...j,
           exploreCorrect,
           targetIso: j.targetIso,
           usedIsos: j.usedIsos,
           leg: "explore",
         }
-        if (!done) {
-          const iso = nextJourneyIso({ ...j, usedIsos: j.usedIsos })
-          next.targetIso = iso
-          next.usedIsos = iso ? [...j.usedIsos, iso] : j.usedIsos
+        const scored = {
+          ...progress,
+          xp: progress.xp + JOURNEY_EXPLORE_XP,
+          coins: progress.coins + 8,
+          continentXp: progress.continentXp + JOURNEY_EXPLORE_XP,
         }
-        persistJourney(next)
+        persistJourney(held)
+        void persist(scored)
+        clearExploreFlow()
         set({
-          journey: next,
-          progress,
+          journey: held,
+          progress: scored,
+          displayXp: scored.xp,
           selectedIso: hit.iso,
-          highlightIso: done ? hit.iso : next.targetIso,
+          highlightIso: hit.iso,
           lastHit: hit,
           lastCountryName: name,
           hitTint: "gold",
-          lastFeedback: { ok: true, text: t().play.verdictOk },
+          rewardPulse: JOURNEY_EXPLORE_XP,
+          toast: null,
+          lastFeedback: { ok: true, text: t().play.correctWellDone },
           flyTo: hit.iso ? { lat: hit.lat, lng: hit.lng, dist: 3.4 } : st.flyTo,
         })
-        if (done) {
+        for (let i = 0; i < 5; i += 1) window.setTimeout(() => audio.play("xp"), 70 * i)
+        exploreFlowTimers.push(
           window.setTimeout(() => {
             if (get().journey?.id !== j.id) return
-            const follow: Journey = { ...next, leg: "inter-flags", targetIso: null }
+            if (done) return
+            set({ lastFeedback: { ok: true, text: t().play.nextMissionReady } })
+          }, 1400),
+        )
+        exploreFlowTimers.push(
+          window.setTimeout(() => {
+            if (get().journey?.id !== j.id) return
+            if (done) {
+              const follow: Journey = { ...held, leg: "inter-flags", targetIso: null }
+              persistJourney(follow)
+              set({ journey: follow, hitTint: null, lastFeedback: null, rewardPulse: 0, selectedIso: hit.iso })
+              return
+            }
+            const iso = nextJourneyIso({ ...j, usedIsos: j.usedIsos })
+            const follow: Journey = {
+              ...held,
+              targetIso: iso,
+              usedIsos: iso ? [...j.usedIsos, iso] : j.usedIsos,
+            }
             persistJourney(follow)
-            set({ journey: follow, hitTint: null })
-          }, 900)
-        }
+            set({
+              journey: follow,
+              highlightIso: iso,
+              selectedIso: null,
+              lastCountryName: null,
+              hitTint: null,
+              lastFeedback: null,
+              rewardPulse: 0,
+            })
+          }, done ? 1800 : 2600),
+        )
         return
       }
       const flagsStreak = j.flagsStreak + 1
@@ -1421,7 +1478,7 @@ export const useGame = create<GameState>((set, get) => ({
       set({ journey: done, stage: "hub" })
       return
     }
-    const xp = journeyXp(j)
+    const xp = Math.max(0, journeyXp(j) - j.exploreCorrect * JOURNEY_EXPLORE_XP)
     progress = {
       ...progress,
       xp: progress.xp + xp,
