@@ -1,7 +1,8 @@
 import type { LearningContinent } from "./continents"
 
-export const JOURNEY_EXPLORE_GOAL = 5
-export const JOURNEY_FLAGS_GOAL = 5
+export const JOURNEY_EXPLORE_GOAL = 3
+export const JOURNEY_FLAGS_GOAL = 3
+export const JOURNEY_EXPLORE_XP = 22
 export const JOURNEY_SESSION_KEY = "gq-journey"
 
 export type JourneyLeg = "pick" | "explore" | "inter-flags" | "flags" | "inter-puzzle" | "puzzle" | "results"
@@ -43,7 +44,7 @@ export function makeJourney(continent: LearningContinent): Journey {
 }
 
 export function journeyXp(j: Journey) {
-  const explore = j.exploreCorrect * 22
+  const explore = j.exploreCorrect * JOURNEY_EXPLORE_XP
   const flags = j.flagsBest * 36 + (j.flagsBest >= JOURNEY_FLAGS_GOAL ? 40 : 0)
   const puzzle = 90 + Math.min(40, Math.round(j.puzzleLeftoverMs / 4000))
   return explore + flags + puzzle

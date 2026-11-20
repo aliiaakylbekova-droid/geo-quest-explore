@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import "../index.css"
 import { audio } from "../audio/AudioManager"
-import { TutorialOverlay, tutorialDone } from "../screens/TutorialOverlay"
+import { TutorialOverlay } from "../screens/TutorialOverlay"
+import { JOURNEY_EXPLORE_GOAL, JOURNEY_FLAGS_GOAL } from "../data/journey"
 import { ACHIEVEMENTS } from "../data/achievements"
 import { GEO_CAMPAIGN } from "../data/campaign"
 import { CONTINENT_RU, type LearningContinent } from "../data/continents"
@@ -103,7 +104,7 @@ export function GameShell() {
   const [point, setPoint] = useState<{ title: string; text: string } | null>(null)
   const [flagRound, setFlagRound] = useState<StoryMission | null>(null)
   const [hoverTip, setHoverTip] = useState<{ name: string; capital: string | null; x: number; y: number } | null>(null)
-  const [coach, setCoach] = useState(() => !tutorialDone())
+  const [coach, setCoach] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
   const [hudMin, setHudMin] = useState(false)
   const [exitAsk, setExitAsk] = useState(false)
@@ -315,6 +316,12 @@ export function GameShell() {
 
   const leftTitle = campaign
     ? campaign.title
+    : journey?.leg === "explore"
+      ? ui.journeyExplore
+      : journey?.leg === "flags"
+        ? ui.journeyFlags
+        : journey?.leg === "puzzle"
+          ? ui.journeyPuzzle
     : stage === "explore"
       ? ui.explore
       : stage === "hub"
@@ -332,8 +339,10 @@ export function GameShell() {
               : mission?.title ?? ui.missions
   const leftBrief = campaign
     ? campaign.instruction
+    : journey
+      ? null
     : stage === "explore"
-      ? "Вращай Землю, приближай, кликай страны. Двойной клик — подлёт. Сначала смотри, потом задание."
+      ? "Вращай Землю, приближай, кликай страны. Двойной клик — подлёт."
       : stage === "hub"
         ? ui.pickContinentLead
         : stage === "puzzle"
@@ -357,7 +366,7 @@ export function GameShell() {
 
   return (
     <div
-      className={`gq-live hud intro-${introPhase}${screenFlash === "red" ? " is-flash-red" : ""}${hudMin ? " is-hud-min" : ""}`}
+      className={`gq-live hud intro-${introPhase}${screenFlash === "red" ? " is-flash-red" : ""}${hudMin ? " is-hud-min" : ""}${journey ? " is-journey" : ""}${journey?.leg === "explore" && lastFeedback?.ok ? " is-explore-ok" : ""}`}
       data-hud="explorer-v2"
       data-intro={introPhase}
       data-stage={stage}
@@ -412,7 +421,7 @@ export function GameShell() {
               {ui.level} {String(missionIndex).padStart(2, "0")}
             </p>
             <h3>{leftTitle}</h3>
-            <p className="brief">{leftBrief}</p>
+            {leftBrief ? <p className="brief">{leftBrief}</p> : null}
             {campaign ? (
               <>
                 <p className="goal mission-prompt">
@@ -432,18 +441,22 @@ export function GameShell() {
             </>
           ) : null}
           {stage === "explore" ? (
-            <p className="goal">
+            <p className="goal mission-prompt">
               <span>{ui.goal}</span>
               {journey?.leg === "explore" && journey.targetIso
                 ? ui.findCountry.replace("{name}", countryName(journey.targetIso))
-                : "Изучи территорию. Двойной клик по стране — подлёт. Имена крупнее вдали, мельче вблизи."}
+                : "Изучи территорию. Двойной клик по стране — подлёт."}
             </p>
           ) : null}
           {journey?.leg === "explore" ? (
-            <p className="xp-reward">{ui.exploreCount.replace("{n}", String(journey.exploreCorrect))}</p>
+            <p className="xp-reward">
+              {ui.exploreCount.replace("{n}", String(journey.exploreCorrect)).replace("{goal}", String(JOURNEY_EXPLORE_GOAL))}
+            </p>
           ) : null}
           {journey?.leg === "flags" ? (
-            <p className="xp-reward">{ui.flagsStreak.replace("{n}", String(journey.flagsStreak))}</p>
+            <p className="xp-reward">
+              {ui.flagsStreak.replace("{n}", String(journey.flagsStreak)).replace("{goal}", String(JOURNEY_FLAGS_GOAL))}
+            </p>
           ) : null}
           {stage === "hub" ? (
             <p className="goal">
@@ -478,11 +491,8 @@ export function GameShell() {
           {stage === "flag" && mission && lastFeedback && !lastFeedback.ok ? (
             <p className="bad">{lastFeedback.text}</p>
           ) : null}
-          {stage === "mission" && mission && lastFeedback ? (
-            <>
-              <p className={lastFeedback.ok ? "ok" : "bad"}>{lastFeedback.text}</p>
-              {lastFeedback.ok ? <p className="recap">{mission.recap}</p> : null}
-            </>
+          {stage === "mission" && mission && lastFeedback && !lastFeedback.ok ? (
+            <p className="bad">{lastFeedback.text}</p>
           ) : null}
           {stage === "journal" ? (
             <div className="gq-collection">
@@ -565,6 +575,16 @@ export function GameShell() {
               </p>
               <button type="button" className="chip" onClick={() => setChangeCont(true)}>
                 {ui.changeContinent}
+              </button>
+              <button
+                type="button"
+                className="chip"
+                onClick={() => {
+                  setMoreOpen(false)
+                  setCoach(true)
+                }}
+              >
+                {ui.howToPlay}
               </button>
             </div>
           ) : null}
@@ -891,6 +911,19 @@ export function GameShell() {
           </button>
           <button
             type="button"
+            onClick={() => {
+              setMoreOpen(false)
+              setCoach(true)
+            }}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="8" />
+              <path d="M12 8v.01M11 11h1v5h1" />
+            </svg>
+            <span>{ui.howToPlay}</span>
+          </button>
+          <button
+            type="button"
             className={stage === "settings" ? "on" : ""}
             onClick={() => {
               setMoreOpen(false)
@@ -928,7 +961,7 @@ export function GameShell() {
         </div>
       ) : null}
 
-      {stage === "explore" && country ? (
+      {stage === "explore" && country && !journey ? (
         <div className="country-pop-root">
           <aside className="country-pop" role="dialog" aria-labelledby="country-pop-title">
             <button type="button" className="country-pop-x" onClick={dismissCountry}>
@@ -966,7 +999,7 @@ export function GameShell() {
       ) : null}
       <GeoJourneyLayer />
       <CampaignOverlay />
-      {introPhase === "ready" && coach ? <TutorialOverlay onDone={() => setCoach(false)} /> : null}
+      {coach ? <TutorialOverlay onDone={() => setCoach(false)} /> : null}
       {changeCont ? (
         <div className="gq-tutorial" data-continent="change">
           <button type="button" className="btn ghost gq-cont-close" onClick={() => setChangeCont(false)}>

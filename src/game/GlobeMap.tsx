@@ -44,13 +44,22 @@ export function EarthBundle({
   const [hoverIso, setHoverIso] = useState<string | null>(null)
   const countries = pack?.countries ?? BUNDLED_NAMES
   const roundRules = useGame((s) => s.roundRules)
+  const introPhase = useGame((s) => s.introPhase)
+  const journeyLeg = useGame((s) => s.journey?.leg)
   const hunting = stage === "mission" || stage === "flag" || Boolean(campaign)
-  const showNames = stage !== "discover" && (!hunting || Boolean(roundRules?.showNames) || stage === "explore")
+  const overlayLeg = journeyLeg === "pick" || journeyLeg === "inter-flags" || journeyLeg === "inter-puzzle" || journeyLeg === "results"
+  const showNames =
+    introPhase === "ready" &&
+    stage !== "discover" &&
+    stage !== "register" &&
+    !overlayLeg &&
+    (!hunting || Boolean(roundRules?.showNames) || stage === "explore")
   const hoverCapitals = stage === "flag"
   const labeled = useMemo(() => {
-    if (lod === 0) return countries.filter((c) => (c.pop ?? 0) > 12_000_000)
-    if (lod === 1) return countries.filter((c) => (c.pop ?? 0) > 8_000_000)
-    return countries
+    const pool = countries.filter((c) => c.iso.length === 2 && c.iso !== "AQ")
+    if (lod === 0) return pool.filter((c) => (c.pop ?? 0) > 10_000_000)
+    if (lod === 1) return pool.filter((c) => (c.pop ?? 0) > 3_000_000)
+    return pool
   }, [countries, lod])
 
   useEffect(() => {
@@ -73,7 +82,12 @@ export function EarthBundle({
   return (
     <>
       <LodTracker onLod={setLod} />
-      <CountryLabels countries={labeled} visible={showNames} keepIso={selectedIso || highlightIso || hoverIso} />
+      <CountryLabels
+        countries={labeled}
+        visible={showNames}
+        keepIso={selectedIso || highlightIso}
+        hoverIso={hoverIso}
+      />
       {hoverCapitals ? <HoverCapital iso={hoverIso} enabled /> : null}
       <Suspense fallback={<EarthWarmup />}>
         <EarthScene
